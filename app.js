@@ -3660,4 +3660,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- DATA EXPORT / IMPORT ---
+app.exportData = function () {
+    const exportObj = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        data: this.data
+    };
+
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `emlak_yedek_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert('Veriler başarıyla indirildi!');
+};
+
+app.importData = function (file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const imported = JSON.parse(e.target.result);
+
+            if (!imported.data) {
+                alert('Geçersiz yedek dosyası!');
+                return;
+            }
+
+            if (confirm(`Bu dosyayı yüklemek istiyor musunuz?\n\nİçerik:\n- ${(imported.data.listings || []).length} ilan\n- ${(imported.data.customers || []).length} müşteri\n- ${(imported.data.findings || []).length} bulum\n- ${(imported.data.appointments || []).length} randevu\n\nMevcut verilerinizin ÜZERİNE yazılacak!`)) {
+
+                this.data = imported.data;
+                this.saveData('listings');
+                this.saveData('customers');
+                this.saveData('findings');
+                this.saveData('appointments');
+
+                // Refresh all views
+                this.renderListings();
+                this.renderCustomers();
+                this.renderFindings();
+                this.updateStats();
+
+                alert('Veriler başarıyla yüklendi!');
+            }
+        } catch (err) {
+            alert('Dosya okunamadı: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+
+    // Reset file input
+    document.getElementById('import-file').value = '';
+};
 
