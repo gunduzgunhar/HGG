@@ -491,6 +491,10 @@ const app = {
             if (storedFsbo) this.data.fsbo = JSON.parse(storedFsbo);
             if (!this.data.fsbo) this.data.fsbo = [];
 
+            const storedFindings = localStorage.getItem('rea_findings');
+            if (storedFindings) this.data.findings = JSON.parse(storedFindings);
+            if (!this.data.findings) this.data.findings = [];
+
             if (storedAppointments) this.data.appointments = JSON.parse(storedAppointments);
         } catch (error) {
             console.error('Data loading error:', error);
@@ -509,6 +513,8 @@ const app = {
             localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
         } else if (key === 'fsbo') {
             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
+        } else if (key === 'findings') {
+            localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
         }
         this.updateStats();
     },
