@@ -1,0 +1,3663 @@
+/**
+ * Real Estate Assistant - Application Logic
+ */
+const app = {
+    data: {
+        listings: [],
+        customers: [],
+        appointments: [],
+        findings: []
+    },
+    currentCustomerRegions: [],
+    currentEditRegions: [],
+
+    adanaLocations: {
+        "Seyhan": {
+            lat: 37.0016, lng: 35.3289,
+            neighborhoods: {
+                "Güzelyalı": [37.0350, 35.3050],
+                "Reşatbey": [36.9950, 35.3250],
+                "Kurtuluş": [37.0000, 35.3100],
+                "Cemalpaşa": [37.0050, 35.3200],
+                "Ziyapaşa": [37.0020, 35.3220],
+                "Gazipaşa": [37.0000, 35.3200],
+                "Pınar": [37.0200, 35.2800],
+                "Tellidere": [37.0250, 35.2900],
+                "Yeşilyurt": [37.0200, 35.3000],
+                "Fevzipaşa": [37.0100, 35.2900],
+                "Mithatpaşa": [37.0090, 35.3090],
+                "Aydınlar": [37.0220, 35.2680],
+                "Gürselpaşa": [37.0250, 35.2800],
+                "Çınarlı": [36.9920, 35.3280],
+                "Döşeme": [36.9950, 35.3150],
+                "Yenibaraj": [37.0050, 35.2850],
+                "2000 Evler": [37.0150, 35.3050]
+            }
+        },
+        "Çukurova": {
+            lat: 37.0500, lng: 35.3000,
+            neighborhoods: {
+                "Toros": [37.0500, 35.3000],
+                "Mahfesığmaz": [37.0450, 35.3100],
+                "Güzelyalı": [37.0400, 35.3050],
+                "Huzurevleri": [37.0550, 35.2950],
+                "Yurt": [37.0400, 35.2900],
+                "Belediye": [37.0600, 35.3000],
+                "100. Yıl": [37.0550, 35.3100],
+                "Beyazevler": [37.0350, 35.3200],
+                "Kabasakal": [37.0980, 35.2500],
+                "Kurttepe": [37.0650, 35.2850],
+                "Karslılar": [37.0700, 35.2900]
+            }
+        },
+        "Yüreğir": {
+            lat: 36.9850, lng: 35.3500,
+            neighborhoods: {
+                "Kışla": [37.0000, 35.3500],
+                "Yavrular": [36.9900, 35.3600],
+                "Sinanpaşa": [36.9950, 35.3400],
+                "Atakent": [37.0100, 35.3600],
+                "Yamaçlı": [36.9800, 35.3400]
+            }
+        },
+        "Sarıçam": {
+            lat: 37.0700, lng: 35.4000,
+            neighborhoods: {
+                "Sofulu": [37.0700, 35.4100],
+                "Gültepe": [37.0800, 35.4000],
+                "Osmangazi": [37.0750, 35.4200],
+                "Yıldırım": [37.0650, 35.3900]
+            }
+        }
+    },
+
+    // Ortalama m2 Fiyatları (TL) - MAHALLE BAZLI DETAYLI VERİ
+    // Ortalama m2 Fiyatları (TL) - GÜNCEL PİYASA (Ocak 2026 Tahmini)
+    marketData: {
+        "Seyhan": {
+            avg: 28000,
+            neighborhoods: { "Gürselpaşa": 37000, "Pınar": 32000, "Gazipaşa": 31000, "Kurtuluş": 36000, "Mithatpaşa": 29000, "2000 Evler": 30000 }
+        },
+        "Çukurova": {
+            avg: 39000,
+            neighborhoods: { "Güzelyalı": 45000, "Mahfesığmaz": 42000, "Toros": 40000, "Yurt": 38000, "Kabasakal": 48000, "100. Yıl": 39000, "Belediye Evleri": 36000, "Kurttepe": 35000, "Karslılar": 34000, "Huzurevleri": 33000 }
+        },
+        "Yüreğir": {
+            avg: 24000,
+            neighborhoods: { "Atakent": 28000, "Yavuzlar": 22000, "Kışla": 25000 }
+        },
+        "Sarıçam": {
+            avg: 26000,
+            neighborhoods: { "Gültepe": 30000, "Sofulu": 27000 }
+        }
+    },
+
+    evaluateListing(id) {
+        const listing = this.data.listings.find(l => l.id === id);
+        if (!listing) return;
+
+        // 1. Get Base Info
+        const price = parseInt(listing.price);
+        const size = parseInt(listing.size_net || listing.size_gross || 100);
+
+        // 2. Get Neighborhood Average - PRIORITY: Sold listings > Market data
+        let marketAvg = 25000; // Fallback
+        let neighborhood = '';
+        let dataSource = 'Genel Tahmin';
+
+        // Find district and neighborhood from listing location
+        const districtMatch = Object.keys(this.marketData).find(d => listing.location.includes(d));
+        if (districtMatch) {
+            neighborhood = districtMatch;
+            const districtData = this.marketData[districtMatch];
+            marketAvg = districtData.avg;
+            dataSource = `${districtMatch} Ortalaması`;
+
+            if (districtData.neighborhoods) {
+                const neighName = Object.keys(districtData.neighborhoods).find(n => listing.location.includes(n));
+                if (neighName) {
+                    marketAvg = districtData.neighborhoods[neighName];
+                    neighborhood = neighName;
+                    dataSource = `${neighName} Ortalaması`;
+                }
+            }
+        }
+
+        // PRIORITY: Use SOLD listings from EXACT SAME neighborhood only (no district fallback)
+        let usingSoldData = false;
+        let soldDataAge = null;
+        let soldDataSite = null;
+        let soldDataKitchen = null;
+
+        const soldListings = this.data.listings.filter(l =>
+            l.status === 'sold' &&
+            l.final_price &&
+            l.location &&
+            listing.location &&
+            neighborhood && // STRICT: Only if we have a specific neighborhood
+            l.location.includes(neighborhood) // Must match exact neighborhood
+        );
+
+        if (soldListings.length > 0) {
+            usingSoldData = true;
+            // Calculate average price per m² from sold listings
+            let totalUnitPrice = 0;
+            soldListings.forEach(sold => {
+                const soldSize = parseInt(sold.size_net || sold.size_gross || 100);
+                const soldPrice = parseInt(sold.final_price);
+                totalUnitPrice += soldPrice / soldSize;
+            });
+            marketAvg = Math.round(totalUnitPrice / soldListings.length);
+            dataSource = `${neighborhood} Satış Verisi (${soldListings.length} satış)`;
+
+            // Track characteristics of sold listings to avoid double-counting
+            // If most sold listings have similar age/site, we skip those adjustments
+            const soldAges = soldListings.map(s => s.building_age).filter(a => a);
+            const soldSites = soldListings.map(s => s.site_features).filter(s => s);
+            const soldKitchens = soldListings.map(s => s.kitchen).filter(k => k);
+            if (soldAges.length > 0) soldDataAge = soldAges[0]; // Most recent sold
+            if (soldSites.length > 0) soldDataSite = soldSites[0];
+            if (soldKitchens.length > 0) soldDataKitchen = soldKitchens[0];
+        }
+
+        // Start with base value
+        let baseValue = marketAvg * size;
+        let estimatedValue = baseValue;
+        let adjustments = [];
+
+        // 3. PERCENTAGE-BASED ADJUSTMENTS (More realistic)
+        // SMART: Skip adjustments if sold data has same characteristics (avoid double-counting)
+
+        // Building Age - MOST IMPORTANT FACTOR
+        const age = listing.building_age || '';
+        let ageMultiplier = 1.0;
+        let ageLabel = '';
+
+        // Only apply age adjustment if different from sold data OR no sold data
+        const sameAgeAsSold = usingSoldData && soldDataAge && age === soldDataAge;
+
+        if (!sameAgeAsSold) {
+            if (age === '0' || age === '1' || age === '2' || age === '3' || age === '4' || age === '5') {
+                ageMultiplier = 1.20; // +20%
+                ageLabel = 'Yeni Bina (0-5 yaş) +%20';
+            } else if (age === '6-10') {
+                ageMultiplier = 1.10; // +10%
+                ageLabel = 'Genç Bina (6-10 yaş) +%10';
+            } else if (age === '11-15') {
+                ageMultiplier = 1.0; // Baseline
+            } else if (age === '16-20') {
+                ageMultiplier = 0.90; // -10%
+                ageLabel = 'Orta Yaşlı Bina (16-20 yaş) -%10';
+            } else if (age === '21-25') {
+                ageMultiplier = 0.78; // -22%
+                ageLabel = 'Eski Bina (21-25 yaş) -%22';
+            } else if (age === '26-30') {
+                ageMultiplier = 0.65; // -35%
+                ageLabel = 'Çok Eski Bina (26-30 yaş) -%35';
+            } else if (age === '30+') {
+                ageMultiplier = 0.60; // -40%
+                ageLabel = 'Yaşlı Bina (30+ yaş) -%40';
+            }
+        }
+
+        if (ageLabel) {
+            const ageChange = baseValue * (ageMultiplier - 1);
+            adjustments.push({ label: ageLabel, amount: ageChange, percent: Math.round((ageMultiplier - 1) * 100) });
+        }
+        estimatedValue = baseValue * ageMultiplier;
+
+        // Floor Adjustment - Middle floors are baseline (always apply - not tracked in sold data)
+        const floor = listing.floor_current;
+        const totalFloors = parseInt(listing.floor_total) || 10;
+        const floorNum = parseInt(floor);
+        let floorMultiplier = 1.0;
+        let floorLabel = '';
+
+        if (floor === 'Zemin' || floor === 'Giriş' || floor === 'Bahçe Katı' || floor === '1') {
+            floorMultiplier = 0.95; // -5%
+            floorLabel = 'Giriş/1. Kat -%5';
+        } else if (floorNum && floorNum >= totalFloors) {
+            floorMultiplier = 0.97; // -3%
+            floorLabel = 'Son Kat -%3';
+        }
+
+        if (floorLabel) {
+            const floorChange = estimatedValue * (floorMultiplier - 1);
+            adjustments.push({ label: floorLabel, amount: floorChange, percent: Math.round((floorMultiplier - 1) * 100) });
+        }
+        estimatedValue *= floorMultiplier;
+
+        // Site Features - Huge impact
+        const siteFeatures = listing.site_features || '';
+        let siteMultiplier = 1.0;
+        let siteLabel = '';
+
+        // Only apply site adjustment if different from sold data OR no sold data
+        const sameSiteAsSold = usingSoldData && soldDataSite && siteFeatures === soldDataSite;
+
+        if (!sameSiteAsSold) {
+            if (siteFeatures.includes('Sosyal Donatılı')) {
+                siteMultiplier = 1.20; // +20%
+                siteLabel = 'Sosyal Donatılı Site +%20';
+            } else if (siteFeatures.includes('Kısmi')) {
+                siteMultiplier = 1.08; // +8%
+                siteLabel = 'Kısmi Sosyal Donatı +%8';
+            }
+        }
+
+        if (siteLabel) {
+            const siteChange = estimatedValue * (siteMultiplier - 1);
+            adjustments.push({ label: siteLabel, amount: siteChange, percent: Math.round((siteMultiplier - 1) * 100) });
+        }
+        estimatedValue *= siteMultiplier;
+
+        // Damage Status - Critical
+        const damage = listing.damage || '';
+        let damageMultiplier = 1.0;
+        let damageLabel = '';
+
+        if (damage.includes('Hasarsız')) {
+            // No adjustment - this is the expected default
+        } else if (damage.includes('Az')) {
+            damageMultiplier = 0.82; // -18%
+            damageLabel = 'Az Hasarlı -%18';
+        } else if (damage.includes('Orta')) {
+            damageMultiplier = 0.70; // -30%
+            damageLabel = 'Orta Hasarlı -%30';
+        } else if (damage.includes('Ağır')) {
+            damageMultiplier = 0.40; // -60%
+            damageLabel = 'Ağır Hasarlı -%60';
+        }
+
+        if (damageLabel) {
+            const damageChange = estimatedValue * (damageMultiplier - 1);
+            adjustments.push({ label: damageLabel, amount: damageChange, percent: Math.round((damageMultiplier - 1) * 100) });
+        }
+        estimatedValue *= damageMultiplier;
+
+        // Deed Status (Tapu Durumu) Adjustment
+        const deedStatus = listing.deed_status || '';
+        let deedMultiplier = 1.0;
+        let deedLabel = '';
+
+        if (deedStatus.includes('İrtifak') || deedStatus.includes('irtifak')) {
+            deedMultiplier = 0.93; // -7%
+            deedLabel = 'Kat İrtifaklı -%7';
+        }
+
+        if (deedLabel) {
+            const deedChange = estimatedValue * (deedMultiplier - 1);
+            adjustments.push({ label: deedLabel, amount: deedChange, percent: Math.round((deedMultiplier - 1) * 100) });
+        }
+        estimatedValue *= deedMultiplier;
+
+        // Kitchen Type Adjustment - Closed kitchen is preferred
+        // Only apply if sold data didn't have closed kitchen (avoid double-counting)
+        const kitchen = listing.kitchen || '';
+        let kitchenMultiplier = 1.0;
+        let kitchenLabel = '';
+
+        const soldHadClosedKitchen = usingSoldData && soldDataKitchen &&
+            (soldDataKitchen.includes('Kapalı') || soldDataKitchen.includes('kapalı'));
+        const listingHasClosedKitchen = kitchen.includes('Kapalı') || kitchen.includes('kapalı');
+
+        // Only add +7% if listing has closed kitchen BUT sold data didn't
+        if (listingHasClosedKitchen && !soldHadClosedKitchen) {
+            kitchenMultiplier = 1.07; // +7%
+            kitchenLabel = 'Kapalı Mutfak +%7';
+        }
+
+        if (kitchenLabel) {
+            const kitchenChange = estimatedValue * (kitchenMultiplier - 1);
+            adjustments.push({ label: kitchenLabel, amount: kitchenChange, percent: Math.round((kitchenMultiplier - 1) * 100) });
+        }
+        estimatedValue *= kitchenMultiplier;
+
+        // Interior Condition (İçinin Durumu) Adjustment
+        const interiorCondition = listing.interior_condition || 'Normal';
+        let interiorMultiplier = 1.0;
+        let interiorLabel = '';
+
+        if (interiorCondition === 'Full Yapılı') {
+            interiorMultiplier = 1.20; // +20%
+            interiorLabel = 'Full Yapılı +%20';
+        } else if (interiorCondition === 'Yapılı') {
+            interiorMultiplier = 1.10; // +10%
+            interiorLabel = 'Yapılı +%10';
+        } else if (interiorCondition === 'Normal') {
+            // Baseline - no adjustment
+        } else if (interiorCondition === 'Az Masraflı') {
+            interiorMultiplier = 0.90; // -10%
+            interiorLabel = 'Az Masraflı -%10';
+        } else if (interiorCondition === 'Çok Masraflı') {
+            interiorMultiplier = 0.80; // -20%
+            interiorLabel = 'Çok Masraflı -%20';
+        }
+
+        if (interiorLabel) {
+            const interiorChange = estimatedValue * (interiorMultiplier - 1);
+            adjustments.push({ label: interiorLabel, amount: interiorChange, percent: Math.round((interiorMultiplier - 1) * 100) });
+        }
+        estimatedValue *= interiorMultiplier;
+
+        // 4. Final Comparison
+        const diff = price - estimatedValue;
+        const diffPercent = (diff / estimatedValue) * 100;
+
+        let status = '';
+        let statusClass = '';
+        let statusEmoji = '';
+
+        if (diffPercent < -15) {
+            status = 'ÇOK UYGUN';
+            statusEmoji = '🔥';
+            statusClass = 'text-success';
+        } else if (diffPercent >= -15 && diffPercent <= 10) {
+            status = 'PİYASA DEĞERİNDE';
+            statusEmoji = '✅';
+            statusClass = 'text-primary';
+        } else if (diffPercent > 10 && diffPercent <= 25) {
+            status = 'BİRAZ YÜKSEK';
+            statusEmoji = '⚖️';
+            statusClass = 'text-warning';
+        } else {
+            status = 'PAHALI';
+            statusEmoji = '🛑';
+            statusClass = 'text-danger';
+        }
+
+        // 5. Render Result
+        let adjustmentsHtml = adjustments.map(adj => `
+            <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; color: ${adj.amount > 0 ? '#166534' : '#991B1B'}">
+                <span>${adj.amount > 0 ? '▲' : '▼'} ${adj.label}</span>
+                <span>${adj.amount > 0 ? '+' : ''}${adj.amount.toLocaleString('tr-TR')} TL</span>
+            </div>
+        `).join('');
+
+        if (adjustments.length === 0) {
+            adjustmentsHtml = '<div style="font-size:12px; color:#666; font-style:italic">Standart özellikler (ara kat, hasarsız, normal bina yaşı)</div>';
+        }
+
+        const modalBody = document.getElementById('evaluation-result');
+        modalBody.innerHTML = `
+            <div class="eval-card">
+                <div class="metric-row" style="display:flex; gap:20px; margin-bottom:15px;">
+                    <div class="metric" style="flex:1; text-align:center; padding:15px; background:#f8fafc; border-radius:8px;">
+                        <label style="font-size:11px; color:#64748b; display:block; margin-bottom:5px;">İlan Fiyatı</label>
+                        <span style="font-size:20px; font-weight:700; color:#1e293b;">${price.toLocaleString('tr-TR')} TL</span>
+                    </div>
+                    <div class="metric" style="flex:1; text-align:center; padding:15px; background:linear-gradient(135deg, #e0e7ff, #f0e6ff); border-radius:8px;">
+                        <label style="font-size:11px; color:#6366f1; display:block; margin-bottom:5px;">Tahmini Değer</label>
+                        <span style="font-size:20px; font-weight:800; color:#4f46e5;">${estimatedValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL</span>
+                    </div>
+                </div>
+                
+                <div style="text-align:center; font-size:28px; font-weight:800; margin: 20px 0; padding: 15px; background:var(--bg-secondary); border-radius:12px;">
+                    <span style="font-size:36px;">${statusEmoji}</span><br>
+                    <span class="${statusClass}">${status}</span>
+                    <div style="font-size:14px; color:#64748b; font-weight:normal; margin-top:5px;">
+                        Fark: ${diff > 0 ? '+' : ''}${diff.toLocaleString('tr-TR')} TL
+                    </div>
+                </div>
+
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:15px;">
+                    <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:8px; display:flex; justify-content:space-between;">
+                        <span>📍 ${dataSource} (${marketAvg.toLocaleString('tr-TR')} TL/m²)</span>
+                        <span>${(marketAvg * size).toLocaleString('tr-TR')} TL</span>
+                    </div>
+                    ${adjustmentsHtml}
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid #cbd5e1; font-size:13px; font-weight:bold; text-align:right; color:#334155;">
+                        TAHMİNİ DEĞER: ${estimatedValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
+                    </div>
+                </div>
+                
+                <div style="background:#F0FDF4; border-left: 4px solid #10B981; padding: 10px; border-radius: 4px;">
+                    <p style="color:#064E3B; font-size:12px; line-height:1.4; margin:0;">
+                    💡 Bu değerleme <strong>mahalle ortalaması</strong> üzerine kat, site özellikleri ve hasar durumu gibi faktörler değerlendirilerek hesaplanmıştır.
+                    </p>
+                </div>
+            </div>
+        `;
+
+        this.modals.open('evaluation');
+    },
+
+    init() {
+        if (window.log) log("App.init() called.");
+        try {
+            const btn = document.getElementById('btn-add-customer-header');
+            if (btn) {
+                btn.onclick = (e) => {
+                    if (window.log) log("Button Clicked (JS Handler)");
+                    e.preventDefault();
+                    this.modals.open('add-customer');
+                };
+                if (window.log) log("Button handler attached to btn-add-customer-header");
+            } else {
+                if (window.log) log("WARNING: btn-add-customer-header NOT FOUND");
+            }
+        } catch (e) { if (window.log) log("Error attaching button: " + e); }
+
+        console.log("App Initialized v3 - Kabasakal Check");
+        try { this.loadData(); } catch (e) { console.error("loadData failed", e); }
+        try { this.setupNavigation(); } catch (e) { console.error("setupNavigation failed", e); }
+        try { this.setupModals(); } catch (e) { console.error("setupModals failed", e); }
+        try { this.setupForms(); } catch (e) { console.error("setupForms failed", e); }
+        // this.setupFilters(); 
+        // this.setupGalleryButtons(); // Removed - not defined
+        // this.populateDistricts(); 
+        try { this.renderAll(); } catch (e) { console.error("renderAll failed", e); }
+    },
+
+    setupFilters() {
+        const searchInput = document.querySelector('.search-input');
+        if (searchInput) searchInput.addEventListener('input', () => this.renderListings());
+
+        const filterIds = ['list-filter-type', 'list-filter-neighborhood', 'list-filter-rooms', 'list-filter-damage'];
+        filterIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.renderListings());
+        });
+
+        const districtFilter = document.getElementById('list-filter-district');
+        if (districtFilter) {
+            districtFilter.addEventListener('change', () => this.onListFilterDistrictChange());
+        }
+    },
+
+    // --- DATA MANAGEMENT ---
+    loadData() {
+        try {
+            const storedListings = localStorage.getItem('rea_listings');
+            const storedCustomers = localStorage.getItem('rea_customers');
+            const storedAppointments = localStorage.getItem('rea_appointments');
+
+            if (storedListings) this.data.listings = JSON.parse(storedListings);
+
+            if (storedCustomers) {
+                try {
+                    this.data.customers = JSON.parse(storedCustomers);
+                    // Validate it's an array
+                    if (!Array.isArray(this.data.customers)) this.data.customers = [];
+                } catch (e) {
+                    console.error("Customer Data Corrupt", e);
+                    localStorage.setItem('rea_customers_backup', storedCustomers);
+                    this.data.customers = [];
+                    alert('Müşteri verilerinizde bir hata tespit edildi. Bozuk veriler yedeklendi ve liste sıfırlandı.');
+                }
+            }
+
+            const storedFsbo = localStorage.getItem('rea_fsbo');
+            if (storedFsbo) this.data.fsbo = JSON.parse(storedFsbo);
+            if (!this.data.fsbo) this.data.fsbo = [];
+
+            if (storedAppointments) this.data.appointments = JSON.parse(storedAppointments);
+        } catch (error) {
+            console.error('Data loading error:', error);
+        }
+
+        this.updateStats();
+    },
+
+
+    saveData(key) {
+        if (key === 'listings') {
+            localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
+        } else if (key === 'customers') {
+            localStorage.setItem('rea_customers', JSON.stringify(this.data.customers));
+        } else if (key === 'appointments') {
+            localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
+        } else if (key === 'fsbo') {
+            localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
+        }
+        this.updateStats();
+    },
+
+    debugDistricts() {
+        if (!this.adanaLocations) {
+            alert("HATA: Adana verisi (adanaLocations) BULUNAMADI! (Undefined)");
+            return;
+        }
+        const keys = Object.keys(this.adanaLocations);
+        alert(`DURUM RAPORU:\n\nBulunan İlçe Sayısı: ${keys.length}\nİlçeler: ${keys.join(', ')}\n\nEğer bu mesajı görüyorsanız veri var demektir. Liste yine de boşsa çizim hatasıdır.`);
+    },
+
+    // ... (Navigation and Modals unchanged)
+
+
+
+    populateDistricts() {
+        // Static HTML used for reliability
+        // console.log("Districts are statically defined in HTML.");
+    },
+
+    // --- NAVIGATION ---
+    setupNavigation() {
+        const navItems = document.querySelectorAll('.nav-item');
+        const views = document.querySelectorAll('.view');
+        const pageTitle = document.getElementById('page-title');
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                // Remove active class from all
+                navItems.forEach(n => n.classList.remove('active'));
+                views.forEach(v => v.classList.remove('active'));
+
+                // Add active to current
+                item.classList.add('active');
+                const targetId = item.getAttribute('data-target');
+
+                // Handle virtual views (owners reuses crm)
+                let viewId = targetId;
+                if (targetId === 'owners') {
+                    viewId = 'crm';
+                }
+
+                const viewEl = document.getElementById(viewId);
+                if (viewEl) {
+                    viewEl.classList.add('active');
+                }
+
+                // Update Title
+                const titles = {
+                    'dashboard': 'Genel Bakış',
+                    'listings': 'Portföy Yönetimi',
+                    'crm': 'Müşteri Listesi',
+                    'owners': 'Mülk Sahipleri',
+                    'calendar': 'Ajanda',
+                    'fsbo': 'FSBO Listesi',
+                    'map': 'Harita Görünümü'
+                };
+                pageTitle.textContent = titles[targetId];
+
+                // Re-render specific views to ensure freshness
+                if (targetId === 'crm') {
+                    app.crmFilter = null; // Clear filter for main list
+                    app.renderCustomers();
+                } else if (targetId === 'owners') {
+                    app.crmFilter = 'seller'; // Show only sellers
+                    app.renderCustomers();
+                } else if (targetId === 'listings') {
+                    app.renderListings();
+                } else if (targetId === 'calendar') {
+                    app.renderAppointments();
+                } else if (targetId === 'fsbo') {
+                    app.renderFsboList();
+                } else if (targetId === 'map') {
+                    app.initMap();
+                    app.renderMapPins(); // Ensure pins are fresh
+                }
+            });
+        });
+    },
+
+    // --- MODALS ---
+    modals: {
+        open(id) {
+            const modal = document.getElementById(`modal-${id}`);
+
+            if (!modal) {
+                console.error('Modal not found: modal-' + id);
+                return;
+            }
+            if (modal) {
+                modal.classList.add('active');
+
+                // Force visibility and high z-index
+                modal.style.display = 'flex';
+                modal.style.zIndex = '99999';
+                modal.style.opacity = '1';
+                modal.style.visibility = 'visible';
+
+                // Auto-populate districts when opening relevant modals to ensure data is fresh
+
+                // Auto-populate districts when opening relevant modals to ensure data is fresh
+                if (id === 'add-listing' || id === 'add-customer' || id === 'edit-customer') {
+                    try {
+                        if (app && app.populateDistricts) {
+                            app.populateDistricts();
+                        }
+                    } catch (e) {
+                        console.error("populateDistricts failed", e);
+                    }
+                }
+            }
+        },
+        closeAll() {
+            document.querySelectorAll('.modal-overlay').forEach(el => {
+                el.classList.remove('active');
+                el.style.display = '';
+                el.style.zIndex = '';
+                el.style.opacity = '';
+                el.style.visibility = '';
+            });
+        }
+    },
+
+    setupModals() {
+        // Close buttons
+        document.querySelectorAll('.close-modal').forEach(btn => {
+            btn.addEventListener('click', () => this.modals.closeAll());
+        });
+
+        // Close on outside click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) this.modals.closeAll();
+            });
+        });
+
+        // Quick Add Button logic
+        document.getElementById('quick-add-btn').addEventListener('click', () => {
+            // For now, default to adding a listing
+            this.modals.open('add-listing');
+        });
+    },
+
+    // --- FORMS ---
+    // --- HELPERS ---
+    async fetchCoordinates(addressQueries) {
+        if (!Array.isArray(addressQueries)) addressQueries = [addressQueries];
+
+        for (const query of addressQueries) {
+            try {
+                // console.log("Geocoding trying:", query);
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+                }
+            } catch (error) {
+                console.error("Geocoding failed for:", query, error);
+            }
+        }
+        return null; // All attempts failed
+    },
+
+    setupForms() {
+        // Add Listing Form
+        const formAddListing = document.getElementById('form-add-listing');
+        if (formAddListing) {
+            formAddListing.addEventListener('submit', (e) => {
+                e.preventDefault();
+                app.addListing(new FormData(e.target));
+            });
+        }
+
+        // Format budget input
+        const budgetInput = document.querySelectorAll('input[name="budget"]');
+        budgetInput.forEach(input => {
+            input.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value) value = parseInt(value).toLocaleString('tr-TR');
+                e.target.value = value;
+            });
+        });
+
+        // Add Customer Form - logic moved to addNewCustomer()
+        const formAddCustomer = document.getElementById('form-add-customer');
+        if (formAddCustomer) {
+            formAddCustomer.addEventListener('submit', (e) => {
+                e.preventDefault();
+                app.addNewCustomer();
+            });
+        }
+
+        // Edit Customer Form
+        const formEditCustomer = document.getElementById('form-edit-customer');
+        if (formEditCustomer) {
+            formEditCustomer.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const id = parseInt(formData.get('id'));
+
+                const index = this.data.customers.findIndex(c => c.id === id);
+                if (index === -1) return;
+
+                let finalRegions = this.currentEditRegions.join(' | ');
+                if (!finalRegions) {
+                    const district = document.getElementById('edit-customer-district').value;
+                    const neighborhood = document.getElementById('edit-customer-neighborhood').value;
+                    if (district && neighborhood) finalRegions = `${district}, ${neighborhood}`;
+                }
+
+                const budgetRaw = formData.get('budget').replace(/\./g, '');
+
+                const updatedCustomer = {
+                    ...this.data.customers[index],
+                    name: formData.get('name'),
+                    phone: formData.get('phone'),
+                    budget: budgetRaw,
+                    region: finalRegions,
+                    room_pref: formData.get('room_pref'),
+                    kitchen_pref: formData.get('kitchen_pref'),
+                    max_building_age: formData.get('max_building_age'),
+                    damage_pref: formData.get('damage_pref'),
+                    site_pref: formData.get('site_pref'),
+                    type: formData.get('type'),
+                    notes: formData.get('notes')
+                };
+
+                this.data.customers[index] = updatedCustomer;
+                this.saveData('customers');
+                this.renderCustomers();
+                this.modals.closeAll();
+            });
+        }
+
+        // Edit Listing Form
+        const formEditListing = document.getElementById('form-edit-listing');
+        if (formEditListing) {
+            formEditListing.addEventListener('submit', (e) => {
+                e.preventDefault();
+                alert("DEBUG: Edit form submit triggered!");
+                const formData = new FormData(e.target);
+                const id = parseInt(formData.get('id'));
+                alert("DEBUG: ID = " + id + ", Street = " + formData.get('street'));
+
+                const index = this.data.listings.findIndex(l => l.id === id);
+                if (index === -1) {
+                    alert("İlan bulunamadı!");
+                    return;
+                }
+
+                const district = document.getElementById('edit-listing-district').value;
+                const neighborhood = document.getElementById('edit-listing-neighborhood').value;
+                const location = `${neighborhood}, ${district}, Adana`;
+
+                const updatedListing = {
+                    ...this.data.listings[index],
+                    title: formData.get('title'),
+                    price: formData.get('price').replace(/\./g, ''),
+                    location: location,
+                    street: formData.get('street') || '',
+                    type: formData.get('type'),
+                    status: formData.get('status'),
+                    rooms: formData.get('rooms'),
+                    kitchen: formData.get('kitchen'),
+                    floor_current: formData.get('floor_current'),
+                    floor_total: formData.get('floor_total'),
+                    size_gross: formData.get('size_gross'),
+                    size_net: formData.get('size_net'),
+                    building_age: formData.get('building_age'),
+                    damage: formData.get('damage'),
+                    interior_condition: formData.get('interior_condition'),
+                    facade: formData.get('facade'),
+                    deed_status: formData.get('deed_status'),
+                    site_features: formData.get('site_features'),
+                    owner_name: formData.get('owner_name'),
+                    owner_phone: formData.get('owner_phone'),
+                    description: formData.get('description'),
+                    external_link: formData.get('external_link')
+                };
+
+                this.data.listings[index] = updatedListing;
+                this.saveData('listings');
+                this.renderListings();
+                this.updateStats();
+                this.modals.closeAll();
+            });
+        }
+
+        // District Change Listeners
+        const listingDistrict = document.getElementById('listing-district');
+        if (listingDistrict) {
+            listingDistrict.addEventListener('change', () => this.onListingDistrictChange());
+        }
+
+        // Edit Listing District Change
+        const editListingDistrict = document.getElementById('edit-listing-district');
+        if (editListingDistrict) {
+            editListingDistrict.addEventListener('change', () => this.onEditListingDistrictChange());
+        }
+
+        // Add Appointment Form
+        const formAddAppointment = document.getElementById('form-add-appointment');
+        if (formAddAppointment) {
+            formAddAppointment.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newAppointment = {
+                    id: Date.now(),
+                    title: formData.get('title'),
+                    date: formData.get('date'),
+                    time: formData.get('time'),
+                    notes: formData.get('notes')
+                };
+
+                this.data.appointments.push(newAppointment);
+                this.data.appointments.sort((a, b) => new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time));
+                this.saveData('appointments');
+                this.renderAppointments();
+                this.modals.closeAll();
+                e.target.reset();
+            });
+        }
+    },
+
+    // --- RENDERING ---
+    renderAll() {
+        this.renderListings();
+        this.renderCustomers();
+        this.renderAppointments();
+        this.updateStats();
+        // Map is rendered when tab is activated
+    },
+
+    // --- MAP LOGIC ---
+    map: null,
+
+    initMap() {
+        if (this.map) return; // Already initialized
+
+        // Set default view to Adana (approx)
+        this.map = L.map('map-container').setView([37.0000, 35.3213], 13);
+
+        // Define Layers
+
+        // Define Google Maps Layers
+
+        // 1. Google Streets
+        const googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+
+        // 2. Google Hybrid (Satellite + Labels)
+        const googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+
+        // 3. Google Satellite
+        const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+
+        // 4. Google Terrain
+        const googleTerrain = L.tileLayer('http://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+
+        // Add default layer
+        googleStreets.addTo(this.map);
+
+        // Add Layer Control
+        const baseMaps = {
+            "Google Sokak (Varsayılan)": googleStreets,
+            "Google Hibrit (Uydu+Yol)": googleHybrid,
+            "Google Uydu": googleSat,
+            "Google Arazi": googleTerrain
+        };
+
+        L.control.layers(baseMaps).addTo(this.map);
+
+        setTimeout(() => {
+            this.map.invalidateSize();
+            this.renderMapPins();
+        }, 200);
+    },
+
+
+
+    populateDistricts() {
+        // Map Filters
+        const mapDistrictSelect = document.getElementById('map-filter-district');
+        // Customer Form
+        const custDistrictSelect = document.getElementById('customer-district');
+        // Edit Customer Form
+        const editCustDistrictSelect = document.getElementById('edit-customer-district');
+
+        const districts = Object.keys(this.adanaLocations);
+
+        // Helper to populate
+        const populate = (select) => {
+            if (!select) return;
+            select.innerHTML = '<option value="">İlçe Seçiniz</option>';
+            districts.forEach(dist => {
+                const option = document.createElement('option');
+                option.value = dist;
+                option.textContent = dist;
+                select.appendChild(option);
+            });
+        };
+
+        populate(mapDistrictSelect);
+        populate(custDistrictSelect);
+        populate(editCustDistrictSelect);
+    },
+
+    // --- EDIT CUSTOMER LOGIC ---
+    currentEditRegions: [],
+
+    onEditCustomerDistrictChange() {
+        const districtName = document.getElementById('edit-customer-district').value;
+        const neighborhoodSelect = document.getElementById('edit-customer-neighborhood');
+
+        neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+
+        if (!districtName || !this.adanaLocations[districtName]) return;
+
+        const distData = this.adanaLocations[districtName];
+
+        Object.keys(distData.neighborhoods).forEach(neigh => {
+            const option = document.createElement('option');
+            option.value = neigh;
+            option.textContent = neigh;
+            neighborhoodSelect.appendChild(option);
+        });
+    },
+
+    addRegionToEdit() {
+        const districtSelect = document.getElementById('edit-customer-district');
+        const neighborhoodSelect = document.getElementById('edit-customer-neighborhood');
+
+        const district = districtSelect.value;
+        const neighborhood = neighborhoodSelect.value;
+
+        if (!district || !neighborhood) {
+            alert('Lütfen hem ilçe hem de mahalle seçiniz.');
+            return;
+        }
+
+        const regionStr = `${district}, ${neighborhood}`;
+        if (this.currentEditRegions.includes(regionStr)) return;
+
+        this.currentEditRegions.push(regionStr);
+        this.renderEditSelectedRegions();
+
+        districtSelect.value = "";
+        neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçin</option>';
+    },
+
+    removeRegionFromEdit(index) {
+        this.currentEditRegions.splice(index, 1);
+        this.renderEditSelectedRegions();
+    },
+
+    renderEditSelectedRegions() {
+        const container = document.getElementById('edit-selected-regions');
+        container.innerHTML = this.currentEditRegions.map((reg, idx) => `
+                        <div class="region-tag">
+                            <span>${reg}</span>
+                            <i class="ph ph-x" onclick="app.removeRegionFromEdit(${idx})"></i>
+                        </div>
+                    `).join('');
+
+        // Update hidden input
+        document.getElementById('edit-customer-region-input').value = this.currentEditRegions.join(' | ');
+    },
+
+    editCustomer(id) {
+        console.log("Editing customer:", id);
+        const customer = this.data.customers.find(c => c.id === id);
+        if (!customer) {
+            alert("Müşteri bulunamadı!");
+            return;
+        }
+
+        try {
+            const form = document.getElementById('form-edit-customer');
+            if (!form) {
+                console.error("Edit form not found");
+                return;
+            }
+
+            form.elements['id'].value = customer.id;
+            form.elements['name'].value = customer.name;
+            form.elements['phone'].value = customer.phone;
+            // Format budget for display
+            if (form.elements['budget']) {
+                form.elements['budget'].value = customer.budget ? parseInt(customer.budget).toLocaleString('tr-TR') : "";
+            }
+            if (form.elements['room_pref']) form.elements['room_pref'].value = customer.room_pref || "";
+            if (form.elements['facade']) form.elements['facade'].value = customer.facade || ""; // NEW
+            if (form.elements['deed_status']) form.elements['deed_status'].value = customer.deed_status || ""; // NEW
+            if (form.elements['kitchen_pref']) form.elements['kitchen_pref'].value = customer.kitchen_pref || "";
+            form.elements['type'].value = customer.type;
+            form.elements['notes'].value = customer.notes || "";
+
+            // Populate Regions
+            this.currentEditRegions = customer.region ? String(customer.region).split(' | ').filter(r => r.trim() !== '') : [];
+            this.renderEditSelectedRegions();
+
+            this.modals.open('edit-customer');
+        } catch (e) {
+            console.error("Error opening edit modal:", e);
+            alert("Düzenleme penceresi açılırken bir hata oluştu.");
+        }
+    },
+
+    openCustomerEditPopup(customerId) {
+        const customer = this.data.customers.find(c => c.id == customerId);
+        if (!customer) {
+            alert("Müşteri bulunamadı!");
+            return;
+        }
+
+        // Create popup HTML
+        const popup = document.createElement('div');
+        popup.id = 'customer-edit-popup';
+        popup.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;" onclick="if(event.target === this) this.remove();">
+                <div style="background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation();">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; font-size: 18px;">Müşteri Düzenle</h3>
+                        <button onclick="document.getElementById('customer-edit-popup').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">&times;</button>
+                    </div>
+                    <form id="customer-edit-form" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">İsim</label>
+                            <input type="text" name="name" value="${customer.name || ''}" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;" required>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Telefon</label>
+                            <input type="tel" name="phone" value="${customer.phone || ''}" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Bütçe (TL)</label>
+                            <input type="text" name="budget" value="${customer.budget || ''}" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;" oninput="app.formatPriceInput(this)">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Öncelik</label>
+                            <select name="priority" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="" ${!customer.priority ? 'selected' : ''}>Seçiniz</option>
+                                <option value="yüksek" ${customer.priority === 'yüksek' ? 'selected' : ''}>🔴 Acil (Yüksek)</option>
+                                <option value="orta" ${customer.priority === 'orta' ? 'selected' : ''}>🟡 Orta</option>
+                                <option value="düşük" ${customer.priority === 'düşük' ? 'selected' : ''}>🟢 Normal (Düşük)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Oda Tercihi</label>
+                            <select name="room_pref" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="">Farketmez</option>
+                                <option value="1+1" ${customer.room_pref === '1+1' ? 'selected' : ''}>1+1</option>
+                                <option value="2+1" ${customer.room_pref === '2+1' ? 'selected' : ''}>2+1</option>
+                                <option value="3+1" ${customer.room_pref === '3+1' ? 'selected' : ''}>3+1</option>
+                                <option value="4+1" ${customer.room_pref === '4+1' ? 'selected' : ''}>4+1</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="button" onclick="document.getElementById('customer-edit-popup').remove()" style="flex: 1; padding: 12px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer;">İptal</button>
+                            <button type="submit" style="flex: 1; padding: 12px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(popup);
+
+        // Handle form submission
+        document.getElementById('customer-edit-form').onsubmit = (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            customer.name = formData.get('name');
+            customer.phone = formData.get('phone');
+            customer.budget = formData.get('budget').replace(/\./g, '');
+            customer.priority = formData.get('priority');
+            customer.room_pref = formData.get('room_pref');
+
+            this.saveData('customers');
+            this.renderCustomers();
+            document.getElementById('customer-edit-popup').remove();
+        };
+    },
+
+    deleteCustomer(id) {
+        if (!confirm("Bu müşteriyi silmek istediğinize emin misiniz?")) return;
+        const index = this.data.customers.findIndex(c => c.id === id);
+        if (index === -1) return;
+
+        this.data.customers.splice(index, 1);
+        this.saveData('customers');
+        this.renderCustomers();
+    },
+
+    onDistrictChange() {
+        const districtName = document.getElementById('map-filter-district').value;
+        const neighborhoodSelect = document.getElementById('map-filter-neighborhood');
+
+        // Reset Neighborhoods
+        neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+
+        if (!districtName || !this.adanaLocations[districtName]) return;
+
+        // Pan to District
+        const distData = this.adanaLocations[districtName];
+        this.map.setView([distData.lat, distData.lng], 13);
+
+        // Populate Neighborhoods
+        Object.keys(distData.neighborhoods).forEach(neigh => {
+            const option = document.createElement('option');
+            option.value = neigh;
+            option.textContent = neigh;
+            neighborhoodSelect.appendChild(option);
+        });
+    },
+
+    // --- CUSTOMER REGION LOGIC ---
+    currentCustomerRegions: [],
+
+    onCustomerDistrictChange() {
+        const districtName = document.getElementById('customer-district').value;
+        const neighborhoodSelect = document.getElementById('customer-neighborhood');
+
+        neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+
+        if (!districtName || !this.adanaLocations[districtName]) return;
+
+        const distData = this.adanaLocations[districtName];
+
+        Object.keys(distData.neighborhoods).forEach(neigh => {
+            const option = document.createElement('option');
+            option.value = neigh;
+            option.textContent = neigh;
+            neighborhoodSelect.appendChild(option);
+        });
+    },
+
+    addRegion() {
+        const districtSelect = document.getElementById('customer-district');
+        const neighborhoodSelect = document.getElementById('customer-neighborhood');
+
+        const district = districtSelect.value;
+        const neighborhood = neighborhoodSelect.value;
+
+        if (!district || !neighborhood) {
+            alert('Lütfen hem ilçe hem de mahalle seçiniz.');
+            return;
+        }
+
+        const regionStr = `${district}, ${neighborhood}`;
+
+        // Prevent duplicates
+        if (this.currentCustomerRegions.includes(regionStr)) {
+            return;
+        }
+
+        this.currentCustomerRegions.push(regionStr);
+        this.renderSelectedRegions();
+
+        // Reset selection
+        districtSelect.value = "";
+        neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçin</option>';
+    },
+
+    removeRegion(index) {
+        this.currentCustomerRegions.splice(index, 1);
+        this.renderSelectedRegions();
+    },
+
+    renderSelectedRegions() {
+        const container = document.getElementById('selected-regions');
+        container.innerHTML = this.currentCustomerRegions.map((reg, idx) => `
+                        <div class="region-tag">
+                            <span>${reg}</span>
+                            <i class="ph ph-x" onclick="app.removeRegion(${idx})"></i>
+                        </div>
+                    `).join('');
+
+        // Update hidden input
+        document.getElementById('customer-region-input').value = this.currentCustomerRegions.join(' | ');
+    },
+
+    onListingDistrictChange() {
+        const districtName = document.getElementById('listing-district').value;
+        const neighborhoodSelect = document.getElementById('listing-neighborhood');
+
+        neighborhoodSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+
+        if (!districtName || !this.adanaLocations[districtName]) return;
+
+        const distData = this.adanaLocations[districtName];
+
+        Object.keys(distData.neighborhoods).forEach(neigh => {
+            const option = document.createElement('option');
+            option.value = neigh;
+            option.textContent = neigh;
+            neighborhoodSelect.appendChild(option);
+        });
+    },
+
+    onNeighborhoodChange() {
+        const districtName = document.getElementById('map-filter-district').value;
+        const neighborhoodName = document.getElementById('map-filter-neighborhood').value;
+
+        if (districtName && neighborhoodName) {
+            const coords = this.adanaLocations[districtName].neighborhoods[neighborhoodName];
+            if (coords) {
+                this.map.setView(coords, 15);
+            }
+        }
+    },
+
+    renderMapPins() {
+        if (!this.map) return;
+
+        // Get Filter Values
+        const typeFilter = document.getElementById('map-filter-type').value;
+        const roomsFilter = document.getElementById('map-filter-rooms').value;
+        const maxPrice = document.getElementById('map-filter-price-max').value;
+
+        // Remove existing layers if any (except tile layer)
+        this.map.eachLayer((layer) => {
+            if (layer instanceof L.Marker) {
+                this.map.removeLayer(layer);
+            }
+        });
+
+        let hasChanges = false;
+
+        // Filter and Add pins
+        this.data.listings.forEach(listing => {
+            // Apply Filters
+            if (typeFilter !== 'all' && listing.type !== typeFilter) return;
+            if (roomsFilter !== 'all' && listing.rooms !== roomsFilter) return;
+            if (maxPrice && parseInt(listing.price) > parseInt(maxPrice)) return;
+
+            // Mock coordinates: Generate random near Adana center if not exists
+            // OR if it's stuck at the old default error location (approx 37.00, 35.32)
+            const isDefaultLoc = listing.lat && Math.abs(listing.lat - 37.0000) < 0.01 && Math.abs(listing.lng - 35.3213) < 0.01;
+
+            if (!listing.lat || isDefaultLoc) {
+                let centerLat = 37.0000;
+                let centerLng = 35.3213;
+
+                // Try to use District/Neighborhood center
+                if (listing.location) {
+                    const parts = listing.location.split(',').map(s => s.trim());
+                    if (parts.length >= 2) {
+                        // Start from end because format is "Neigh, Dist, City" usually
+                        // But mostly it is "Neigh, Dist, Adana"
+                        // parts[0] is Neigh, parts[1] is Dist
+                        const neigh = parts[0];
+                        const dist = parts[1];
+
+                        if (this.adanaLocations[dist] && this.adanaLocations[dist].neighborhoods[neigh]) {
+                            [centerLat, centerLng] = this.adanaLocations[dist].neighborhoods[neigh];
+                        } else if (this.adanaLocations[dist]) {
+                            centerLat = this.adanaLocations[dist].lat;
+                            centerLng = this.adanaLocations[dist].lng;
+                        }
+                    }
+                }
+
+                // Random offset 
+                listing.lat = centerLat + (Math.random() - 0.5) * 0.005;
+                listing.lng = centerLng + (Math.random() - 0.5) * 0.005;
+
+                // Auto-save the fix
+                if (isDefaultLoc || !listing.lat) {
+                    this.saveData('listings');
+                }
+
+                hasChanges = true;
+            }
+
+            // Custom Icon - different style for locked pins
+            const isLocked = listing.pinLocked === true;
+            const customIcon = L.divIcon({
+                className: `custom-map-pin ${isLocked ? 'pin-locked' : ''}`,
+                html: `<i class="ph ph-house-line"></i>${isLocked ? '<i class="ph ph-lock-simple" style="position:absolute; bottom:-2px; right:-2px; font-size:12px; color:#16a34a; background:white; border-radius:50%; padding:1px;"></i>' : ''}`,
+                iconSize: [48, 48],
+                iconAnchor: [24, 24],
+                popupAnchor: [0, -28]
+            });
+
+            const marker = L.marker([listing.lat, listing.lng], {
+                draggable: !isLocked, // Only draggable if NOT locked
+                icon: customIcon
+            }).addTo(this.map);
+
+            // Save new position on drag end
+            marker.on('dragend', (event) => {
+                const newPos = event.target.getLatLng();
+                listing.lat = newPos.lat;
+                listing.lng = newPos.lng;
+                this.saveData('listings');
+                console.log(`Updated location for ${listing.title}:`, newPos);
+            });
+
+            // Show Boundary on Click if available
+            if (listing.boundary) {
+                let boundaryLayer;
+                marker.on('popupopen', () => {
+                    if (boundaryLayer) this.map.removeLayer(boundaryLayer);
+                    boundaryLayer = L.geoJSON(listing.boundary, {
+                        style: { color: '#EF4444', weight: 2, fillOpacity: 0.1 }
+                    }).addTo(this.map);
+                });
+                marker.on('popupclose', () => {
+                    if (boundaryLayer) this.map.removeLayer(boundaryLayer);
+                });
+            }
+
+            // Popover content with lock/unlock button
+            const lockBtnHtml = isLocked
+                ? `<button class="btn btn-secondary" onclick="app.togglePinLock(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #16a34a; background: #dcfce7; border-color: #bbf7d0;" title="Kilidi Aç"><i class="ph ph-lock-simple-open"></i></button>`
+                : `<button class="btn btn-secondary" onclick="app.togglePinLock(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #d97706; background: #fef3c7; border-color: #fde68a;" title="Konumu Kilitle"><i class="ph ph-lock-simple"></i></button>`;
+
+            const dragHintHtml = isLocked
+                ? `<div style="font-size:11px; color:#16a34a; margin-top:2px; font-style:italic;">
+                    <i class="ph ph-lock-simple"></i> Konum kilitli
+                   </div>`
+                : `<div style="font-size:11px; color:#F59E0B; margin-top:2px; font-style:italic;">
+                    <i class="ph ph-hand-grabbing"></i> Konumu düzeltmek için pini sürükleyin
+                   </div>`;
+
+            const popupContent = `
+                            <div style="min-width: 150px">
+                                <strong>${listing.title}</strong><br>
+                                <span style="font-size:12px; color:#666">${listing.location || 'Konum Yok'}${listing.street ? '<br>' + listing.street : ''}</span><br>
+                                <span style="font-size:12px; color:#666">${listing.rooms} | ${listing.size_net ? listing.size_net : listing.size_gross}m²</span><br>
+                                <span style="color:var(--primary); font-weight:bold">${parseInt(listing.price).toLocaleString('tr-TR')} TL</span><br>
+                                ${dragHintHtml}
+                            <div class="listing-actions">
+                                <button class="btn btn-primary btn-block" onclick="app.openGallery(${listing.id})">İncele</button>
+                                ${lockBtnHtml}
+                                <button class="btn btn-secondary" onclick="app.evaluateListing(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #7C3AED; background: #EDE9FE; border-color: #DDD6FE;" title="Gemini Değerleme"><i class="ph ph-sparkle"></i></button>
+                                <button class="btn btn-secondary" onclick="app.openEditListingModal(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px;"><i class="ph ph-pencil-simple"></i></button>
+                                <button class="btn btn-secondary" onclick="app.deleteListing(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #DC2626; background: #FEF2F2; border-color: #FECACA;"><i class="ph ph-trash"></i></button>
+                                ${listing.external_link && listing.status === 'active' ? `<a href="${listing.external_link}" target="_blank" class="btn btn-secondary" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px;" title="İlana Git"><i class="ph ph-link"></i></a>` : ''}
+                            </div>
+                        </div>`;
+
+            marker.bindPopup(popupContent);
+        });
+
+        // Persist generated coordinates so they don't jump around
+        if (hasChanges) {
+            this.saveData('listings');
+        }
+    },
+
+    // Toggle pin lock for a listing
+    togglePinLock(listingId) {
+        const listing = this.data.listings.find(l => l.id === listingId);
+        if (!listing) return;
+
+        listing.pinLocked = !listing.pinLocked;
+        this.saveData('listings');
+
+        // Close any open popup and re-render pins
+        this.map.closePopup();
+        this.renderMapPins();
+
+        // Show feedback
+        const msg = listing.pinLocked ? 'Konum kilitlendi!' : 'Kilit açıldı, artık sürükleyebilirsiniz.';
+        console.log(msg);
+    },
+
+    // --- GALLERY LOGIC ---
+    currentGalleryImages: [],
+    currentImageIndex: 0,
+
+    openGallery(listingOrId) {
+        let listing;
+        if (typeof listingOrId === 'object') {
+            listing = listingOrId;
+        } else {
+            // Use == to allow string/number mismatch from HTML attributes
+            listing = this.data.listings.find(l => l.id == listingOrId);
+        }
+        if (!listing) {
+            console.error("Gallery: Listing not found for id", listingOrId);
+            return;
+        }
+
+        // Mock Images using Unsplash
+        this.currentGalleryImages = [
+            `https://source.unsplash.com/random/800x600/?house,${listing.id},1`,
+            `https://source.unsplash.com/random/800x600/?living-room,${listing.id},2`,
+            `https://source.unsplash.com/random/800x600/?kitchen,${listing.id},3`,
+            `https://source.unsplash.com/random/800x600/?bedroom,${listing.id},4`
+        ];
+
+        this.currentImageIndex = 0;
+        this.updateGalleryView(listing.title);
+
+        // Populate Details
+        const detailsContainer = document.getElementById('gallery-listing-details');
+        if (detailsContainer) {
+            detailsContainer.innerHTML = `
+                            <div><span style="color:#666;">Fiyat:</span> <b>${parseInt(listing.price).toLocaleString('tr-TR')} TL</b></div>
+                            <div><span style="color:#666;">Konum:</span> <b>${listing.location}</b></div>
+                            <div><span style="color:#666;">Oda:</span> <b>${listing.rooms}</b></div>
+                            <div><span style="color:#666;">Brüt m²:</span> <b>${listing.size_gross}m²</b></div>
+                            <div><span style="color:#666;">Net m²:</span> <b>${listing.size_net}m²</b></div>
+                            <div><span style="color:#666;">Kat:</span> <b>${listing.floor_current} / ${listing.floor_total}</b></div>
+                            <div><span style="color:#666;">Bina Yaşı:</span> <b>${listing.building_age || '-'}</b></div>
+                            <div><span style="color:#666;">Isıtma:</span> <b>${listing.heating || '-'}</b></div>
+                            <div><span style="color:#666;">Cephe:</span> <b>${listing.facade || '-'}</b></div>
+                            <div><span style="color:#666;">Tapu:</span> <b style="color:#6366f1">${listing.deed_status || '-'}</b></div>
+                        `;
+        }
+
+        this.modals.open('gallery');
+    },
+
+    updateGalleryView(title) {
+        if (title) document.getElementById('gallery-title').textContent = title;
+
+        const imgElement = document.getElementById('gallery-image');
+        imgElement.src = this.currentGalleryImages[this.currentImageIndex];
+
+        // Update thumbnails
+        const thumbContainer = document.getElementById('gallery-thumbnails');
+        thumbContainer.innerHTML = this.currentGalleryImages.map((src, idx) => `
+                        <img src="${src}" class="gallery-thumb ${idx === this.currentImageIndex ? 'active' : ''}" onclick="app.switchImage(${idx})">
+                    `).join('');
+    },
+
+    switchImage(index) {
+        this.currentImageIndex = index;
+        this.updateGalleryView();
+    },
+
+    nextImage() {
+        this.currentImageIndex = (this.currentImageIndex + 1) % this.currentGalleryImages.length;
+        this.updateGalleryView();
+    },
+
+    prevImage() {
+        this.currentImageIndex = (this.currentImageIndex - 1 + this.currentGalleryImages.length) % this.currentGalleryImages.length;
+        this.updateGalleryView();
+    },
+
+    setupGalleryButtons() {
+        document.querySelector('.slider-nav.next').addEventListener('click', () => this.nextImage());
+        document.querySelector('.slider-nav.prev').addEventListener('click', () => this.prevImage());
+    },
+
+    findMatches(customerId) {
+        console.log("App finding matches for:", customerId);
+        const customer = this.data.customers.find(c => c.id === customerId);
+        if (!customer) {
+            console.error("Customer not found:", customerId);
+            alert("Müşteri bulunamadı!");
+            return;
+        }
+
+        try {
+            // Parse customer regions
+            const knownDistricts = ['seyhan', 'çukurova', 'yüreğir', 'sarıçam', 'adana'];
+            let regions = [];
+            if (customer.region) {
+                regions = customer.region.split(/[,|]/)
+                    .map(r => r.trim())
+                    .filter(r => r.length > 0)
+                    .filter(r => !knownDistricts.includes(r.toLocaleLowerCase('tr-TR')));
+            }
+
+            // --- SHARED MATCHER ---
+            const checkCriteria = (item, isFsbo = false) => {
+                // 0. Status Check
+                if (isFsbo) {
+                    // For FSBO, exclude 'Olumsuz' or 'Satıldı' logic if you had it.
+                    // For now, include everything except explicitly negative ones if needed.
+                    // Let's just include all available FSBOs.
+                } else {
+                    if (item.status === 'passive' || item.status === 'sold') return false;
+                }
+
+                // 1. Region Match
+                let regionMatch = false;
+                if (regions.length === 0) {
+                    regionMatch = true;
+                } else {
+                    let neighborhood = "";
+                    if (isFsbo) {
+                        neighborhood = (item.neighborhood || "").toLocaleLowerCase('tr-TR');
+                        // Fallback to searching inside district if neighborhood missing?
+                        // Or searching inside text/notes? For now strictly field based.
+                    } else {
+                        const locParts = (item.location || "").split(',').map(p => p.trim());
+                        neighborhood = locParts[0] ? locParts[0].toLocaleLowerCase('tr-TR') : '';
+                    }
+
+                    regionMatch = regions.some(r => {
+                        const rLower = r.toLocaleLowerCase('tr-TR');
+                        return neighborhood.includes(rLower) || rLower.includes(neighborhood);
+                    });
+                }
+
+                // 2. Room Match
+                let roomMatch = true;
+                if (customer.room_pref && customer.room_pref !== "") {
+                    const itemRooms = (item.rooms || "").toLocaleLowerCase('tr-TR').replace(/\s/g, '');
+                    const customerRooms = customer.room_pref.toLocaleLowerCase('tr-TR').replace(/\s/g, '');
+
+                    // IF FSBO has no room data, we might want to be lenient or strict.
+                    // Let's be strict if data exists, but if item.rooms is empty, maybe fail?
+                    // Usually "No match" is safer to avoid garbage.
+                    if (itemRooms === "") roomMatch = false;
+                    else roomMatch = itemRooms.includes(customerRooms) || customerRooms.includes(itemRooms);
+                }
+
+                // 3. Kitchen Match (Listings Only usually)
+                let kitchenMatch = true;
+                if (!isFsbo && customer.kitchen_pref && customer.kitchen_pref !== "") {
+                    const listingKitchen = (item.kitchen || "").toLocaleLowerCase('tr-TR');
+                    const customerKitchen = customer.kitchen_pref.toLocaleLowerCase('tr-TR');
+                    kitchenMatch = listingKitchen.includes(customerKitchen) || customerKitchen.includes(listingKitchen);
+                }
+
+                // 4. Budget Match
+                let budgetMatch = true;
+                if (customer.budget) {
+                    const itemPrice = parseInt(item.price || '0');
+                    const customerBudget = parseInt(customer.budget || '0');
+                    if (itemPrice > 0) {
+                        budgetMatch = itemPrice <= (customerBudget * 1.15);
+                    }
+                    // If Price is 0 (Unspecified), let's assume match for FSBO maybe? 
+                    // No, usually price is key.
+                }
+
+                // 5. Building Age (Listings + FSBO)
+                let buildingAgeMatch = true;
+                if (customer.max_building_age && customer.max_building_age !== "") {
+                    const maxAge = parseInt(customer.max_building_age);
+                    const itemAgeStr = item.building_age || "";
+
+                    if (itemAgeStr) {
+                        let actualAge = 999;
+                        if (itemAgeStr.includes("-")) actualAge = parseInt(itemAgeStr.split("-")[1]) || 999;
+                        else if (itemAgeStr.includes("+")) actualAge = 31;
+                        else actualAge = parseInt(itemAgeStr) || 999;
+
+                        buildingAgeMatch = actualAge <= maxAge;
+                    }
+                }
+
+                // 6. Damage & Site (Listings typically)
+                // We'll skip complex checks for FSBO as data is often sparse
+
+                return regionMatch && roomMatch && kitchenMatch && budgetMatch && buildingAgeMatch;
+            };
+
+            // GET MATCHES
+            const listingMatches = this.data.listings.filter(l => checkCriteria(l, false));
+            const fsboMatches = (this.data.fsbo || []).filter(f => checkCriteria(f, true));
+
+            console.log(`Found matches: Listings=${listingMatches.length}, FSBO=${fsboMatches.length}`);
+
+            // RENDER UI
+            const listContainer = document.getElementById('matches-list');
+            const criteriaEl = document.getElementById('matches-criteria');
+
+            if (criteriaEl) {
+                criteriaEl.innerHTML = `
+                    Aranan: <strong>${regions.join(', ') || 'Tüm Bölgeler'}</strong> <br>
+                    Bütçe: <strong>${customer.budget ? parseInt(customer.budget).toLocaleString('tr-TR') + ' TL' : 'Limitsiz'}</strong> <br>
+                    Özellikler: <strong>${customer.room_pref || 'Farketmez'}</strong>
+                `;
+            }
+
+            let html = '';
+
+            // Helper to get existing match status for a customer-listing pair
+            const getMatchStatus = (listingId, isFsbo = false) => {
+                if (!customer.matchHistory) return null;
+                const key = isFsbo ? `fsbo_${listingId}` : `listing_${listingId}`;
+                return customer.matchHistory[key] || null;
+            };
+
+            // Status badge colors
+            const statusColors = {
+                'Sunuldu': { bg: '#dbeafe', color: '#1e40af' },
+                'Beğenilmedi': { bg: '#fee2e2', color: '#991b1b' },
+                'Fiyat Yüksek': { bg: '#fef3c7', color: '#92400e' },
+                'İlgileniyor': { bg: '#dcfce7', color: '#166534' }
+            };
+
+            // 1. Internal Listings Section
+            if (listingMatches.length > 0) {
+                html += '<div style="font-size:12px; font-weight:bold; color:#64748b; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">PORTFÖYÜMÜZDEN EŞLEŞENLER</div>';
+                html += listingMatches.map(item => {
+                    const existingStatus = getMatchStatus(item.id, false);
+                    const statusStyle = existingStatus ? statusColors[existingStatus] : null;
+                    return `
+                    <div class="listing-card match-card-${item.id}" style="flex-direction: row; align-items: center; padding: 10px; transition: background 0.2s; margin-bottom: 8px; position: relative;" 
+                            onmouseover="this.style.background='var(--bg-secondary)'" 
+                            onmouseout="this.style.background='white'">
+                        
+                        <img src="https://source.unsplash.com/random/100x100/?house,${item.id}" style="width: 70px; height: 70px; border-radius: 8px; object-fit: cover; cursor:pointer;" onclick="triggerOpenGallery(${item.id})" onerror="this.src='https://via.placeholder.com/100?text=Ev'">
+                        <div style="margin-left: 10px; flex: 1; cursor:pointer;" onclick="triggerOpenGallery(${item.id})">
+                            <div style="font-weight: 600; font-size:14px;">${item.title}</div>
+                            <div style="font-size: 12px; color: #666;">${item.location || 'Konum Yok'}</div>
+                            <div style="font-size: 13px; color: var(--primary); font-weight:bold;">
+                                ${parseInt(item.price || '0').toLocaleString('tr-TR')} TL
+                            </div>
+                            ${existingStatus ? `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:${statusStyle.bg}; color:${statusStyle.color}; margin-top:4px; display:inline-block;">${existingStatus}</span>` : ''}
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+                            <button class="btn btn-sm btn-secondary" onclick="triggerOpenGallery(${item.id})" style="padding:6px;"><i class="ph ph-caret-right"></i></button>
+                            <button class="btn btn-sm btn-outline match-status-btn" onclick="event.stopPropagation(); app.toggleMatchStatusMenu(${customer.id}, ${item.id}, 'listing', this)" style="padding:4px 6px; font-size:10px;" title="Durum Belirle">
+                                <i class="ph ph-dots-three-vertical"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            }
+
+            // 2. FSBO Matches Section
+            if (fsboMatches.length > 0) {
+                html += '<div style="font-size:12px; font-weight:bold; color:#d97706; margin:16px 0 8px 0; border-bottom:1px solid #ffd8a8; padding-bottom:4px;">SAHİBİNDEN (FSBO) FIRSATLARI</div>';
+                html += fsboMatches.map(item => {
+                    const existingStatus = getMatchStatus(item.id, true);
+                    const statusStyle = existingStatus ? statusColors[existingStatus] : null;
+                    return `
+                    <div class="listing-card" style="display:flex; flex-direction:column; padding:12px; border-left:3px solid #f59e0b; margin-bottom:8px; position:relative;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <strong style="color:#1e293b; font-size:14px;">${item.owner}</strong>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                ${existingStatus ? `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:${statusStyle.bg}; color:${statusStyle.color};">${existingStatus}</span>` : ''}
+                                <span style="font-size:11px; background:#fffbeb; color:#b45309; padding:2px 6px; border-radius:4px;">${item.status || 'FSBO'}</span>
+                                <button class="btn btn-sm btn-outline match-status-btn" onclick="event.stopPropagation(); app.toggleMatchStatusMenu(${customer.id}, '${item.id}', 'fsbo', this)" style="padding:2px 4px; font-size:10px;" title="Durum Belirle">
+                                    <i class="ph ph-dots-three-vertical"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="font-size:12px; color:#64748b; margin-bottom:4px;">
+                            ${item.district || ''} / ${item.neighborhood || ''} • ${item.rooms || '-'}
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:14px; font-weight:bold; color:#d97706;">${parseInt(item.price || 0).toLocaleString('tr-TR')} TL</span>
+                            <a href="tel:${item.phone}" class="btn btn-sm btn-outline" style="padding:4px 8px; font-size:11px;" onclick="event.stopPropagation()">
+                                <i class="ph ph-phone"></i> Ara
+                            </a>
+                        </div>
+                        ${item.link ? `<a href="${item.link}" target="_blank" style="font-size:11px; color:#3b82f6; text-decoration:underline; margin-top:4px;">İlana Git</a>` : ''}
+                    </div>
+                `;
+                }).join('');
+            }
+
+            if (listingMatches.length === 0 && fsboMatches.length === 0) { // Fix variable name check
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <p>Mevcut kriterlere uygun ilan veya FSBO fırsatı bulunamadı.</p>
+                    </div>
+                `;
+            } else {
+                listContainer.innerHTML = html;
+            }
+
+            this.modals.open('matches');
+
+        } catch (error) {
+            console.error("Error finding matches:", error);
+            alert("Eşleşme aranırken bir hata oluştu: " + error.message);
+        }
+    },
+
+    // --- MATCH STATUS MENU ---
+    toggleMatchStatusMenu(customerId, itemId, itemType, buttonEl) {
+        // Remove any existing menu
+        const existingMenu = document.getElementById('match-status-dropdown');
+        if (existingMenu) existingMenu.remove();
+
+        // Get button position
+        const rect = buttonEl.getBoundingClientRect();
+
+        // Create dropdown menu
+        const menu = document.createElement('div');
+        menu.id = 'match-status-dropdown';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${rect.left - 140}px;
+            top: ${rect.bottom + 4}px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 99999;
+            min-width: 160px;
+            overflow: hidden;
+        `;
+
+        const statuses = [
+            { label: 'Sunuldu', icon: 'ph-check', color: '#1e40af' },
+            { label: 'İlgileniyor', icon: 'ph-heart', color: '#166534' },
+            { label: 'Beğenilmedi', icon: 'ph-thumbs-down', color: '#991b1b' },
+            { label: 'Fiyat Yüksek', icon: 'ph-currency-circle-dollar', color: '#92400e' },
+            { label: 'Temizle', icon: 'ph-eraser', color: '#64748b' }
+        ];
+
+        menu.innerHTML = statuses.map(s => `
+            <div onclick="event.stopPropagation(); app.setMatchStatus(${customerId}, '${itemId}', '${itemType}', '${s.label}')" 
+                 style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; color: ${s.color}; transition: background 0.15s;"
+                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <i class="ph ${s.icon}"></i> ${s.label}
+            </div>
+        `).join('');
+
+        // Append to body for fixed positioning
+        document.body.appendChild(menu);
+
+        // Close menu when clicking outside
+        const closeHandler = (e) => {
+            if (!menu.contains(e.target) && e.target !== buttonEl) {
+                menu.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 10);
+    },
+
+    setMatchStatus(customerId, itemId, itemType, status) {
+        const customer = this.data.customers.find(c => c.id === customerId);
+        if (!customer) {
+            console.error("Customer not found:", customerId);
+            return;
+        }
+
+        // Initialize matchHistory if not exists
+        if (!customer.matchHistory) customer.matchHistory = {};
+
+        const key = itemType === 'fsbo' ? `fsbo_${itemId}` : `listing_${itemId}`;
+
+        if (status === 'Temizle') {
+            delete customer.matchHistory[key];
+        } else {
+            customer.matchHistory[key] = status;
+        }
+
+        // Save and refresh
+        this.saveData('customers');
+
+        // Remove dropdown
+        const menu = document.getElementById('match-status-dropdown');
+        if (menu) menu.remove();
+
+        // Refresh the matches modal by re-triggering findMatches
+        this.findMatches(customerId);
+    },
+
+    // --- HELPERS ---
+    formatPriceInput(input) {
+        // Remove non-digit characters
+        let value = input.value.replace(/\D/g, '');
+        if (value === '') {
+            input.value = '';
+            return;
+        }
+        // Format with dots
+        input.value = parseInt(value).toLocaleString('tr-TR');
+    },
+
+    // --- RENDER HELPERS ---
+
+
+    renderListings() {
+        const grid = document.getElementById('listings-grid');
+        const statsContainer = document.getElementById('listings-stats');
+        grid.innerHTML = '';
+
+        // Get Filter Values
+        const searchInput = document.querySelector('.search-input');
+        const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+        const districtFilter = document.getElementById('list-filter-district') ? document.getElementById('list-filter-district').value : '';
+        const neighborhoodFilter = document.getElementById('list-filter-neighborhood') ? document.getElementById('list-filter-neighborhood').value : '';
+        const roomFilter = document.getElementById('list-filter-rooms') ? document.getElementById('list-filter-rooms').value : '';
+        const damageFilter = document.getElementById('list-filter-damage') ? document.getElementById('list-filter-damage').value : '';
+        const typeFilter = document.getElementById('list-filter-type') ? document.getElementById('list-filter-type').value : 'all';
+        const facadeFilter = document.getElementById('list-filter-facade') ? document.getElementById('list-filter-facade').value : 'all';
+
+        // DEBUG: VISUALIZE FILTERS - REMOVED
+
+        let filtered = this.data.listings.filter(item => {
+            try {
+                // Safe string access with Turkish Locale support
+                const title = (item.title || '').toLocaleLowerCase('tr-TR');
+                const location = (item.location || '').toLocaleLowerCase('tr-TR');
+                const owner = (item.owner_name || '').toLocaleLowerCase('tr-TR');
+
+                // Text Search
+                if (searchTerm && !(title.includes(searchTerm) || location.includes(searchTerm) || owner.includes(searchTerm))) return false;
+
+                // Type Filter
+                if (typeFilter === 'passive') {
+                    if (item.status !== 'passive') return false;
+                } else if (typeFilter !== 'all') {
+                    if (item.type !== typeFilter) return false;
+                    if (item.status === 'passive' && typeFilter !== 'passive') return false;
+                }
+
+                // District Filter
+                if (districtFilter && districtFilter !== 'all' && !location.includes(districtFilter.toLocaleLowerCase('tr-TR'))) return false;
+
+                // Neighborhood Filter
+                if (neighborhoodFilter && neighborhoodFilter !== 'all' && !location.includes(neighborhoodFilter.toLocaleLowerCase('tr-TR'))) return false;
+
+                // Room Filter
+                if (roomFilter && roomFilter !== 'all') {
+                    // Loose matching
+                    if (!String(item.rooms).includes(roomFilter)) return false;
+                }
+
+                // Damage Filter
+                // IMPORTANT: Only filter if value exists and is NOT 'all'
+                if (damageFilter && damageFilter !== 'all') {
+                    const itemDamage = (item.damage || '').toLocaleLowerCase('tr-TR');
+                    const filterVal = damageFilter.toLocaleLowerCase('tr-TR');
+                    if (!itemDamage.includes(filterVal)) return false;
+                }
+
+                // Facade Filter
+                if (facadeFilter && facadeFilter !== 'all') {
+                    const itemFacade = (item.facade || '').toLocaleLowerCase('tr-TR');
+                    const filterValue = facadeFilter.toLocaleLowerCase('tr-TR');
+                    // Permissive check for "KD" vs "Kuzey Doğu" variations
+                    if (!itemFacade.includes(filterValue) && !filterValue.includes(itemFacade)) return false;
+                }
+
+                // Deed Status Filter
+                const deedFilter = document.getElementById('list-filter-deed') ? document.getElementById('list-filter-deed').value : 'all';
+                if (deedFilter && deedFilter !== 'all') {
+                    if ((item.deed_status || '') !== deedFilter) return false;
+                }
+
+                return true;
+            } catch (err) {
+                console.error("Filter error for item:", item, err);
+                return true; // Keep item on error to avoid hiding it
+            }
+        });
+
+        // Display statistics
+        if (statsContainer) {
+            const total = this.data.listings.length;
+            const showing = filtered.length;
+            statsContainer.innerHTML = `<strong>Toplam:</strong> ${total} ilan | <strong>Gösterilen:</strong> ${showing} ilan`;
+        }
+
+        if (filtered.length === 0) {
+            grid.innerHTML = `
+                            <div class="empty-state" style="grid-column: 1/-1;">
+                                <i class="ph ph-file-search"></i>
+                                <p>Filtrelere uygun ilan bulunamadı.</p>
+                            </div>`;
+            return;
+        }
+
+        grid.innerHTML = filtered.map(item => {
+            try {
+                // Safe Property Access
+                const price = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '0';
+                const date = item.date ? new Date(item.date).toLocaleDateString('tr-TR') : '-';
+                const location = item.location || 'Konum Belirtilmemiş';
+                const title = item.title || 'Başlıksız İlan';
+                const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
+                let statusBadge = '';
+                if (item.status === 'passive') statusBadge = '<span class="status-badge passive">Pasif</span>';
+                else if (item.status === 'sold') statusBadge = '<span class="status-badge sold">SATILDI</span>';
+                else if (item.status === 'deposit') statusBadge = '<span class="status-badge deposit">KAPORA</span>';
+                else if (item.status === 'cancelled') statusBadge = '<span class="status-badge cancelled">İPTAL</span>';
+                else statusBadge = `<span class="status-badge ${item.type}">${type}</span>`;
+
+                // Meta Tags
+                const roomTag = item.rooms ? `<span><i class="ph ph-door"></i> ${item.rooms}</span>` : '';
+                const sizeTag = item.size_net ? `<span><i class="ph ph-ruler"></i> ${item.size_net} m²</span>` : '';
+                const floorTag = item.floor_current ? `<span><i class="ph ph-stairs"></i> ${item.floor_current}. Kat</span>` : '';
+                const facadeTag = item.facade ? `<span><i class="ph ph-compass"></i> ${item.facade}</span>` : '';
+                const deedTag = item.deed_status ? `<span><i class="ph ph-file-text"></i> ${item.deed_status}</span>` : '';
+
+                // Compact Card HTML
+                return `
+                            <div class="listing-card type-${item.type}" onclick="app.openGallery(${item.id})">
+                                ${item.status === 'sold' ? `<div class="status-overlay sold">SATILDI<br><span style="font-size: 0.6em">${(item.final_price || 0).toLocaleString('tr-TR')} ₺</span></div>` : ''}
+                                ${item.status === 'deposit' ? `<div class="status-overlay deposit">KAPORA ALINDI<br><span style="font-size: 0.6em">${(item.final_price || 0).toLocaleString('tr-TR')} ₺</span></div>` : ''}
+                                ${item.status === 'cancelled' ? '<div class="status-overlay cancelled">İPTAL EDİLDİ</div>' : ''}
+                                
+                                <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
+                                <div class="context-menu-dropdown" id="menu-${item.id}">
+                                    <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'sold')">
+                                        <i class="ph ph-check-circle" style="color: #166534"></i> Satıldı
+                                    </div>
+                                    <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'deposit')">
+                                        <i class="ph ph-hand-coins" style="color: #854D0E"></i> Kaporası Alındı
+                                    </div>
+                                    <div class="context-menu-item danger" onclick="app.handleStatusUpdate(event, ${item.id}, 'cancelled')">
+                                        <i class="ph ph-x-circle"></i> Vazgeçildi / İptal
+                                    </div>
+                                </div>
+            
+                                <!-- Head: Title & Price -->
+                                <div class="listing-header">
+                                    <div class="listing-title-group">
+                                        <h3 class="listing-title" title="${title}">${title}</h3>
+                                        <div class="listing-location-sm">
+                                            <i class="ph ph-map-pin"></i> ${location}
+                                        </div>
+                                    </div>
+                                    <div class="listing-price-badge">${price} ₺</div>
+                                </div>
+            
+                                <!-- Body: Stats Grid -->
+                                <div class="listing-stats-grid">
+                                    <div class="stat-item" title="Oda Sayısı">
+                                        <i class="ph ph-door"></i> 
+                                        <span>${item.rooms || '-'}</span>
+                                    </div>
+                                    <div class="stat-item" title="Net Metrekare">
+                                        <i class="ph ph-ruler"></i> 
+                                        <span>${item.size_net ? item.size_net + ' m²' : '-'}</span>
+                                    </div>
+                                    <div class="stat-item" title="Kat">
+                                        <i class="ph ph-stairs"></i> 
+                                        <span>${item.floor_current || '-'}${item.floor_total ? ' / ' + item.floor_total : ''}</span>
+                                    </div>
+                                    <div class="stat-item" title="Cephe">
+                                        <i class="ph ph-compass"></i> 
+                                        <span>${item.facade || '-'}</span>
+                                    </div>
+                                </div>
+            
+                                <!-- Footer: Status & Actions -->
+                                <div class="listing-card-footer">
+                                    <div class="listing-tags-row">
+                                         ${item.status === 'passive' ? '<span class="mini-tag gray">Pasif</span>' : ''}
+                                         <span class="mini-tag ${item.type === 'sale' ? 'blue' : 'warn'}">
+                                            ${item.type === 'sale' ? 'Satılık' : 'Kiralık'}
+                                         </span>
+                                         ${item.deed_status ? `<span class="mini-tag gray">${item.deed_status}</span>` : ''}
+                                         ${item.damage ? `<span class="mini-tag ${item.damage.includes('Hasarsız') ? 'green' : item.damage.includes('Az') ? 'warn' : 'red'}">${item.damage}</span>` : ''}
+                                         ${item.interior_condition ? `<span class="mini-tag ${item.interior_condition.includes('Lüks') || item.interior_condition.includes('Masrafsız') ? 'green' : 'warn'}">${item.interior_condition}</span>` : ''}
+                                         ${item.site_features ? `<span class="mini-tag blue">${item.site_features}</span>` : ''}
+                                    </div>
+                                    
+                                    <div class="listing-actions-row" onclick="event.stopPropagation()">
+                                         <button class="action-btn" onclick="app.evaluateListing(${item.id})" title="Yapay Zeka Değerlemesi">
+                                            <i class="ph ph-magic-wand"></i>
+                                        </button>
+                                        <button class="action-btn" onclick="app.openEditListingModal(${item.id})" title="Düzenle">
+                                            <i class="ph ph-pencil-simple"></i>
+                                        </button>
+                                        <button class="action-btn delete" onclick="app.deleteListing(${item.id})" title="Sil">
+                                            <i class="ph ph-trash"></i>
+                                        </button>
+                                        ${item.external_link ? `<a href="${item.external_link}" target="_blank" class="action-btn" title="İlana Git"><i class="ph ph-link"></i></a>` : ''}
+                                    </div>
+                                </div>
+                            </div>`;
+            } catch (err) {
+                console.error("Error rendering item:", item, err);
+                return '';
+            }
+        }).join('');
+    },
+
+    renderFindings() {
+        const grid = document.getElementById('findings-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        const items = this.data.findings || [];
+
+        if (items.length === 0) {
+            grid.innerHTML = `
+                            <div class="empty-state" style="grid-column: 1/-1;">
+                                <i class="ph ph-magnifying-glass-plus"></i>
+                                <p>Henüz bulum eklenmedi.</p>
+                            </div>`;
+            return;
+        }
+
+        grid.innerHTML = items.map(item => {
+            try {
+                const price = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '0';
+                const date = item.date ? new Date(item.date).toLocaleDateString('tr-TR') : '-';
+                const location = item.location || 'Konum Belirtilmemiş';
+                const title = item.title || 'Başlıksız Bulum';
+                const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
+
+                return `
+                            <div class="listing-card type-${item.type}" onclick="app.openAddListingModal(${item.id}, 'finding')">
+                                <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
+                                <div class="context-menu-dropdown" id="menu-${item.id}">
+                                    <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'begenilmedi')">
+                                        <i class="ph ph-thumbs-down" style="color: #ef4444"></i> Beğenilmedi
+                                    </div>
+                                    <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'fiyat_yuksek')">
+                                        <i class="ph ph-trend-up" style="color: #f59e0b"></i> Fiyat Yüksek
+                                    </div>
+                                    <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'takip')">
+                                        <i class="ph ph-bookmarks" style="color: #3b82f6"></i> Takip
+                                    </div>
+                                    <div style="border-top:1px solid #eee; margin:4px 0"></div>
+                                    <div class="context-menu-item danger" onclick="app.deleteFinding(${item.id})">
+                                        <i class="ph ph-trash"></i> Sil
+                                    </div>
+                                </div>
+
+                                <div class="listing-header">
+                                    <div class="listing-title-group">
+                                        <h3 class="listing-title" title="${title}">${title}</h3>
+                                        <div class="listing-location-sm">
+                                            <i class="ph ph-map-pin"></i> ${location}
+                                        </div>
+                                    </div>
+                                    <div class="listing-price-badge" style="background:orange">${price} ₺</div>
+                                </div>
+                                
+                                <div class="listing-stats-grid">
+                                    <div class="stat-item"><i class="ph ph-door"></i> <span>${item.rooms || '-'}</span></div>
+                                    <div class="stat-item"><i class="ph ph-ruler"></i> <span>${item.size_net || '-'} m²</span></div>
+                                    <div class="stat-item"><i class="ph ph-stairs"></i> <span>${item.floor_current || '-'}</span></div>
+                                </div>
+
+                                <div class="listing-card-footer">
+                                    <div class="listing-tags-row">
+                                         <span class="mini-tag blue">Bulum</span>
+                                         ${item.damage ? `<span class="mini-tag gray">${item.damage}</span>` : ''}
+                                         ${item.interior_condition ? `<span class="mini-tag gray">${item.interior_condition}</span>` : ''}
+                                    </div>
+                                    <div class="listing-actions-row" onclick="event.stopPropagation()">
+                                        <button class="action-btn" onclick="app.openAddListingModal(${item.id}, 'finding')" title="Düzenle">
+                                            <i class="ph ph-pencil-simple"></i>
+                                        </button>
+                                        <button class="action-btn delete" onclick="app.deleteFinding(${item.id})" title="Sil">
+                                            <i class="ph ph-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>`;
+            } catch (err) {
+                console.error("Error rendering finding:", item, err);
+                return '';
+            }
+        }).join('');
+    },
+
+    deleteFinding(id) {
+        if (confirm('Bu bulumu silmek istediğinize emin misiniz?')) {
+            this.data.findings = this.data.findings.filter(x => x.id !== id);
+            this.saveData('findings');
+            this.renderFindings();
+        }
+    },
+
+    onFsboDistrictChange() {
+        const districtSelect = document.getElementById('fsbo-district');
+        const district = districtSelect.value;
+        const neighborhoodSelect = document.getElementById('fsbo-neighborhood');
+
+        neighborhoodSelect.innerHTML = '<option value="">Seçiniz</option>';
+
+        if (district && this.adanaLocations[district]) {
+            const neighborhoods = Object.keys(this.adanaLocations[district].neighborhoods);
+            neighborhoods.sort();
+
+            neighborhoods.forEach(n => {
+                const option = document.createElement('option');
+                option.value = n;
+                option.textContent = n;
+                neighborhoodSelect.appendChild(option);
+            });
+        }
+    },
+
+    addNewCustomer() {
+        const form = document.getElementById('form-add-customer');
+        if (!form) return;
+        const formData = new FormData(form);
+
+        let finalRegions = this.currentCustomerRegions.join(' | ');
+        if (!finalRegions) {
+            const district = document.getElementById('customer-district').value;
+            const neighborhood = document.getElementById('customer-neighborhood').value;
+            if (district && neighborhood) finalRegions = `${district}, ${neighborhood}`;
+        }
+
+        const budgetRaw = formData.get('budget').replace(/\./g, '');
+
+        const newCustomer = {
+            id: Date.now(),
+            name: formData.get('name'),
+            phone: formData.get('phone'),
+            budget: budgetRaw,
+            region: finalRegions,
+            room_pref: formData.get('room_pref'),
+            kitchen_pref: formData.get('kitchen_pref'),
+            max_building_age: formData.get('max_building_age'),
+            damage_pref: formData.get('damage_pref'),
+            site_pref: formData.get('site_pref'),
+            type: formData.get('type'),
+            priority: 'normal',
+            notes: formData.get('notes')
+        };
+
+        this.data.customers.unshift(newCustomer);
+        this.saveData('customers');
+        this.renderCustomers();
+        this.modals.closeAll();
+        form.reset();
+        this.currentCustomerRegions = [];
+        this.renderSelectedRegions();
+        alert("Müşteri eklendi!");
+        alert("Müşteri eklendi!");
+    },
+
+    findMatches(customerId) {
+        const customer = this.data.customers.find(c => c.id == customerId);
+        if (!customer) return;
+
+        const budget = parseInt(customer.budget) || 0;
+        const roomPref = customer.room_pref ? customer.room_pref.split('+')[0] : null;
+
+        // Parse Customer Regions
+        const regions = (customer.region || '').split('|').map(r => {
+            if (!r.trim()) return null;
+            const parts = r.split(',').map(p => p.trim().toLowerCase());
+            return { district: parts[0], neighborhood: parts[1] || '' };
+        }).filter(r => r);
+
+        const checkMatch = (item) => {
+            // Active checks
+            if (item.status === 'sold' || item.status === 'cancelled') return false;
+
+            // Budget (allow +20%)
+            const price = parseInt(item.price) || 0;
+            if (price > budget * 1.25) return false;
+
+            // Rooms
+            if (roomPref && item.rooms && !item.rooms.includes(roomPref)) return false;
+
+            // Location Check
+            if (regions.length > 0) {
+                const itemLoc = (item.location || '').toLowerCase();
+                const matchRegion = regions.some(r => {
+                    const distMatch = itemLoc.includes(r.district);
+                    const neighMatch = !r.neighborhood || itemLoc.includes(r.neighborhood);
+                    return distMatch && neighMatch;
+                });
+                if (!matchRegion) return false;
+            }
+
+            return true;
+        };
+
+        const listingMatches = this.data.listings.filter(checkMatch);
+        const findingMatches = (this.data.findings || []).filter(checkMatch);
+
+        const container = document.getElementById('finder-results');
+        if (!container) {
+            console.error("Finder results container not found!");
+            return;
+        }
+
+        const renderMatchCard = (item, source) => {
+            const price = parseInt(item.price).toLocaleString('tr-TR');
+            const title = item.title || 'Başlıksız';
+            const location = item.location || '';
+            const badge = source === 'finding' ? '<span class="mini-tag blue">BULUM</span>' : '<span class="mini-tag green">İLAN</span>';
+            const bg = source === 'finding' ? '#eff6ff' : 'white';
+
+            return `
+                <div class="listing-card" style="background:${bg}" onclick="app.modals.closeAll(); app.openAddListingModal(${item.id}, '${source}')">
+                    <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
+                    <div class="context-menu-dropdown" id="menu-${item.id}">
+                        <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'begenildi')">
+                            <i class="ph ph-thumbs-up" style="color: #16a34a"></i> Beğenildi
+                        </div>
+                        <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'sicak_bakiyor')">
+                            <i class="ph ph-fire" style="color: #ea580c"></i> Sıcak Bakıyor
+                        </div>
+                        <div style="border-top:1px solid #eee; margin:4px 0"></div>
+                        <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'begenilmedi')">
+                            <i class="ph ph-thumbs-down" style="color: #ef4444"></i> Beğenilmedi
+                        </div>
+                        <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'fiyat_yuksek')">
+                            <i class="ph ph-trend-up" style="color: #f59e0b"></i> Fiyat Yüksek
+                        </div>
+                    </div>
+
+                    <div class="listing-header">
+                        <div class="listing-title-group">
+                            <h3 class="listing-title" style="font-size:14px">${title}</h3>
+                            <div class="listing-location-sm"><i class="ph ph-map-pin"></i> ${location}</div>
+                        </div>
+                        <div class="listing-price-badge">${price} ₺</div>
+                    </div>
+                    <div class="listing-card-footer" style="margin-top:10px">
+                        <div class="listing-tags-row">
+                            ${badge}
+                            ${item.rooms ? `<span class="mini-tag gray">${item.rooms}</span>` : ''}
+                            ${item.size_net ? `<span class="mini-tag gray">${item.size_net} m²</span>` : ''}
+                        </div>
+                    </div>
+                    ${item.notes ? `
+                    <div style="background:#fffbeb; padding:6px 8px; border-top:1px dashed #fbbf24; font-size:11px; color:#92400e; margin-top:8px; border-radius:0 0 8px 8px;">
+                        <i class="ph ph-note-pencil"></i> ${item.notes.split('\n').slice(-1)[0]}
+                    </div>` : ''}
+                </div>
+            `;
+        };
+
+        let html = '';
+        if (listingMatches.length === 0 && findingMatches.length === 0) {
+            html = '<div class="empty-state"><p>Uygun eşleşme bulunamadı.</p></div>';
+        } else {
+            html += listingMatches.map(x => renderMatchCard(x, 'listing')).join('');
+            html += findingMatches.map(x => renderMatchCard(x, 'finding')).join('');
+        }
+
+        container.innerHTML = html;
+        this.modals.open('finder');
+    },
+
+    renderCustomers() {
+        const list = document.getElementById('crm-list');
+        let customers = this.data.customers;
+
+        if (this.crmFilter === 'seller') {
+            customers = customers.filter(c => c.type === 'seller');
+            document.getElementById('page-title').textContent = 'Mülk Sahipleri';
+        } else {
+            customers = customers.filter(c => c.type !== 'seller');
+            document.getElementById('page-title').textContent = 'Müşteri Listesi';
+        }
+
+        if (customers.length === 0) {
+            list.innerHTML = `<div class="empty-state"><i class="ph ph-users"></i><p>Liste boş.</p></div>`;
+            return;
+        }
+
+        // Sort by priority first, then by budget (highest first)
+        const priorityOrder = { 'yüksek': 0, 'orta': 1, 'düşük': 2, '': 3 };
+        customers.sort((a, b) => {
+            const aPriority = priorityOrder[a.priority || ''] ?? 3;
+            const bPriority = priorityOrder[b.priority || ''] ?? 3;
+            if (aPriority !== bPriority) return aPriority - bPriority;
+            return (parseInt(b.budget) || 0) - (parseInt(a.budget) || 0);
+        });
+
+        // Grid container with larger cards
+        list.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+                ${customers.map(customer => {
+            const priorityColors = {
+                'yüksek': { bg: '#fef2f2', color: '#dc2626', text: '🔴 Acil' },
+                'orta': { bg: '#fffbeb', color: '#d97706', text: '🟡 Orta' },
+                'düşük': { bg: '#f0fdf4', color: '#16a34a', text: '🟢 Normal' }
+            };
+            const priority = priorityColors[customer.priority] || null;
+
+            return `
+                    <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); border: 1px solid #e5e7eb; ${priority ? 'border-left: 4px solid ' + priority.color : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: #1f2937;">${customer.name}</h4>
+                                <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;"><i class="ph ph-phone"></i> ${customer.phone}</p>
+                            </div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+                                ${priority ? `<span style="background: ${priority.bg}; color: ${priority.color}; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 500;">${priority.text}</span>` : ''}
+                                <span style="background: ${customer.type === 'buyer' ? '#dbeafe' : customer.type === 'seller' ? '#fef3c7' : '#d1fae5'}; 
+                                             color: ${customer.type === 'buyer' ? '#1d4ed8' : customer.type === 'seller' ? '#b45309' : '#047857'}; 
+                                             font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 500;">
+                                    ${customer.type === 'buyer' ? 'Alıcı' : customer.type === 'seller' ? 'Satıcı' : 'Kiracı'}
+                                </span>
+                            </div>
+                        </div>
+                        ${customer.region ? `<p style="font-size: 12px; color: #6b7280; margin: 8px 0;"><i class="ph ph-map-pin" style="color: #9ca3af;"></i> ${customer.region}</p>` : ''}
+                        <div style="display: flex; gap: 16px; margin: 10px 0;">
+                            ${customer.budget ? `<span style="font-size: 14px; color: #059669; font-weight: 700;"><i class="ph ph-wallet"></i> ${parseInt(customer.budget).toLocaleString('tr-TR')} TL</span>` : ''}
+                            ${customer.room_pref ? `<span style="font-size: 12px; color: #6b7280;"><i class="ph ph-door"></i> ${customer.room_pref}</span>` : ''}
+                            ${customer.kitchen_pref ? `<span style="font-size: 12px; color: #6b7280;"><i class="ph ph-cooking-pot"></i> ${customer.kitchen_pref}</span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 12px; border-top: 1px solid #f3f4f6; padding-top: 12px;">
+                            <button onclick="triggerFindMatches('${customer.id}')" style="flex: 1; background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;">İlan Bul</button>
+                            <button onclick="app.openCustomerEditPopup('${customer.id}')" style="flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer;">Düzenle</button>
+                            <button onclick="triggerDeleteCustomer('${customer.id}')" style="background: #fef2f2; color: #dc2626; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer;"><i class="ph ph-trash"></i></button>
+                        </div>
+                    </div>
+                `}).join('')}
+            </div>`;
+    },
+
+    renderAppointments() {
+        const list = document.getElementById('appointments-list');
+        if (this.data.appointments.length === 0) {
+            list.innerHTML = `<div class="empty-state"><p>Randevu yok.</p></div>`;
+            return;
+        }
+
+        list.innerHTML = this.data.appointments.map(apt => `
+                        <div class="appointment-item">
+                            <div class="appointment-date">
+                                <span class="time">${apt.time}</span>
+                            </div>
+                            <div class="appointment-info">
+                                <h4>${apt.title}</h4>
+                                <p>${apt.notes || ''}</p>
+                            </div>
+                        </div>`).join('');
+    },
+
+    onListingDistrictChange() {
+        const districtSelect = document.getElementById('listing-district');
+        const neighborhoodSelect = document.getElementById('listing-neighborhood');
+        if (!districtSelect || !neighborhoodSelect) return;
+
+        const district = districtSelect.value;
+        console.log("District Selected:", district);
+        neighborhoodSelect.innerHTML = '<option value="">Seçiniz</option>';
+        if (!district) return;
+
+        // Simple lookup
+        let locationData = this.adanaLocations[district];
+        console.log("Location Data Found:", !!locationData, locationData ? Object.keys(locationData.neighborhoods) : 'None');
+
+        if (!locationData && (district === 'Çukurova' || district.includes('ukurova'))) {
+            const key = Object.keys(this.adanaLocations).find(k => k.includes('ukurova'));
+            if (key) locationData = this.adanaLocations[key];
+        }
+
+        if (locationData) {
+            Object.keys(locationData.neighborhoods).forEach(n => {
+                const option = document.createElement('option');
+                option.value = n;
+                option.textContent = n;
+                neighborhoodSelect.appendChild(option);
+            });
+            // Explicitly force Kabasakal
+            if (district.includes('ukurova')) {
+                const kOption = document.createElement('option');
+                kOption.value = 'Kabasakal';
+                kOption.textContent = 'Kabasakal';
+                neighborhoodSelect.appendChild(kOption);
+            }
+        }
+    },
+
+    onEditListingDistrictChange() {
+        const districtSelect = document.getElementById('edit-listing-district');
+        const neighborhoodSelect = document.getElementById('edit-listing-neighborhood');
+        if (!districtSelect || !neighborhoodSelect) return;
+
+        const district = districtSelect.value;
+        neighborhoodSelect.innerHTML = '<option value="">Seçiniz</option>';
+        if (!district) return;
+
+        // Use same logic as add listing
+        let locationData = this.adanaLocations[district];
+        if (!locationData && (district === 'Çukurova' || district.includes('ukurova'))) {
+            const key = Object.keys(this.adanaLocations).find(k => k.includes('ukurova'));
+            if (key) locationData = this.adanaLocations[key];
+        }
+
+        if (locationData) {
+            Object.keys(locationData.neighborhoods).forEach(n => {
+                const option = document.createElement('option');
+                option.value = n;
+                option.textContent = n;
+                neighborhoodSelect.appendChild(option);
+            });
+            // Explicitly force Kabasakal
+            if (district.includes('ukurova')) {
+                const kOption = document.createElement('option');
+                kOption.value = 'Kabasakal';
+                kOption.textContent = 'Kabasakal';
+                neighborhoodSelect.appendChild(kOption);
+            }
+        }
+    },
+
+    onListFilterDistrictChange() {
+        const districtSelect = document.getElementById('list-filter-district');
+        const neighborhoodSelect = document.getElementById('list-filter-neighborhood');
+        if (!districtSelect || !neighborhoodSelect) return;
+
+        const district = districtSelect.value;
+        neighborhoodSelect.innerHTML = '<option value="">Tüm Mahalleler</option>';
+
+        if (district && this.adanaLocations[district]) {
+            Object.keys(this.adanaLocations[district].neighborhoods).forEach(n => {
+                const option = document.createElement('option');
+                option.value = n;
+                option.textContent = n;
+                neighborhoodSelect.appendChild(option);
+            });
+        }
+        this.renderListings();
+    },
+
+    openEditListingModal(id) {
+        const listing = this.data.listings.find(l => l.id === id);
+        if (!listing) return;
+
+        const form = document.getElementById('form-edit-listing');
+        if (!form) return;
+
+        // Populate basic fields
+        if (form.elements['id']) form.elements['id'].value = listing.id;
+        if (form.elements['title']) form.elements['title'].value = listing.title || '';
+        if (form.elements['price']) form.elements['price'].value = listing.price ? parseInt(listing.price).toLocaleString('tr-TR') : '';
+        if (form.elements['street']) form.elements['street'].value = listing.street || '';
+
+        // Selects
+        if (form.elements['type']) form.elements['type'].value = listing.type || 'sale';
+        if (form.elements['status']) form.elements['status'].value = listing.status || 'active';
+        if (form.elements['rooms']) form.elements['rooms'].value = listing.rooms || '';
+        if (form.elements['kitchen']) form.elements['kitchen'].value = listing.kitchen || '';
+        if (form.elements['floor_current']) form.elements['floor_current'].value = listing.floor_current || '';
+        if (form.elements['floor_total']) form.elements['floor_total'].value = listing.floor_total || '';
+        if (form.elements['size_gross']) form.elements['size_gross'].value = listing.size_gross || '';
+        if (form.elements['size_net']) form.elements['size_net'].value = listing.size_net || '';
+        if (form.elements['building_age']) form.elements['building_age'].value = listing.building_age || '';
+        if (form.elements['damage']) form.elements['damage'].value = listing.damage || 'Hasarsız';
+        if (form.elements['interior_condition']) form.elements['interior_condition'].value = listing.interior_condition || 'Normal';
+        if (form.elements['facade']) form.elements['facade'].value = listing.facade || '';
+        if (form.elements['deed_status']) form.elements['deed_status'].value = listing.deed_status || '';
+
+        // Owner Info
+        if (form.elements['owner_name']) form.elements['owner_name'].value = listing.owner_name || '';
+        if (form.elements['owner_phone']) form.elements['owner_phone'].value = listing.owner_phone || '';
+
+        // Description
+        if (form.elements['description']) form.elements['description'].value = listing.description || '';
+        if (form.elements['external_link']) form.elements['external_link'].value = listing.external_link || '';
+
+        // Location - Format is "Neighborhood, District, Adana"
+        const locationParts = (listing.location || '').split(',').map(s => s.trim());
+        let district = '';
+        let neighborhood = '';
+
+        if (locationParts.length >= 2) {
+            neighborhood = locationParts[0]; // First part is Neighborhood
+            district = locationParts[1];     // Second part is District
+        } else if (locationParts.length === 1) {
+            // Fallback try to match from text
+            district = Object.keys(this.adanaLocations).find(d => listing.location.includes(d)) || '';
+        }
+
+        const districtSelect = document.getElementById('edit-listing-district');
+        if (districtSelect) {
+            districtSelect.value = district;
+            // Manually trigger population of neighborhoods
+            this.onEditListingDistrictChange();
+
+            // Set neighborhood after options are populated
+            const neighborhoodSelect = document.getElementById('edit-listing-neighborhood');
+            if (neighborhoodSelect && neighborhood) {
+                neighborhoodSelect.value = neighborhood;
+            }
+        }
+
+        this.modals.open('edit-listing');
+    },
+
+    saveEditListing() {
+        const form = document.getElementById('form-edit-listing');
+        if (!form) {
+            alert("Form bulunamadı!");
+            return;
+        }
+
+        const formData = new FormData(form);
+        const id = parseInt(formData.get('id'));
+
+        const index = this.data.listings.findIndex(l => l.id === id);
+        if (index === -1) {
+            alert("İlan bulunamadı! ID: " + id);
+            return;
+        }
+
+        const district = document.getElementById('edit-listing-district').value;
+        const neighborhood = document.getElementById('edit-listing-neighborhood').value;
+        const location = `${neighborhood}, ${district}, Adana`;
+
+        const updatedListing = {
+            ...this.data.listings[index],
+            title: formData.get('title'),
+            price: formData.get('price').replace(/\./g, ''),
+            location: location,
+            street: formData.get('street') || '',
+            type: formData.get('type'),
+            status: formData.get('status'),
+            rooms: formData.get('rooms'),
+            kitchen: formData.get('kitchen'),
+            floor_current: formData.get('floor_current'),
+            floor_total: formData.get('floor_total'),
+            size_gross: formData.get('size_gross'),
+            size_net: formData.get('size_net'),
+            building_age: formData.get('building_age'),
+            damage: formData.get('damage'),
+            interior_condition: formData.get('interior_condition'),
+            facade: formData.get('facade'),
+            deed_status: formData.get('deed_status'),
+            site_features: formData.get('site_features'),
+            owner_name: formData.get('owner_name'),
+            owner_phone: formData.get('owner_phone'),
+            description: formData.get('description'),
+            external_link: formData.get('external_link')
+        };
+
+        this.data.listings[index] = updatedListing;
+        this.saveData('listings');
+        this.renderListings();
+        this.updateStats();
+        this.modals.closeAll();
+        alert("İlan güncellendi! Sokak: " + updatedListing.street);
+    },
+
+    deleteListing(id) {
+        if (confirm('Silinsin mi?')) {
+            this.data.listings = this.data.listings.filter(l => l.id !== id);
+            this.saveData('listings');
+            this.renderListings();
+        }
+    },
+
+    updateStats() {
+        try {
+            // Count Listings
+            const activeListings = this.data.listings.filter(l => l.status === 'active').length;
+            const passiveListings = this.data.listings.filter(l => l.status === 'passive').length;
+
+            // Count Customers
+            const customers = this.data.customers.filter(c => c.type === 'buyer' || c.type === 'tenant').length;
+            const owners = this.data.customers.filter(c => c.type === 'seller').length;
+
+            // Update DOM
+            const elActive = document.getElementById('stat-active-listings');
+            const elSold = document.getElementById('stat-sold');
+            const elCustomers = document.getElementById('stat-customers');
+            const elOwners = document.getElementById('stat-owners');
+
+            if (elActive) elActive.textContent = activeListings;
+            if (elSold) elSold.textContent = passiveListings;
+            if (elCustomers) elCustomers.textContent = customers;
+            if (elOwners) elOwners.textContent = owners;
+
+            // Render neighborhood stats
+            this.renderNeighborhoodStats();
+
+        } catch (e) {
+            console.error("Error updating stats:", e);
+        }
+    },
+
+    renderNeighborhoodStats() {
+        const container = document.getElementById('neighborhood-stats-list');
+        if (!container) return;
+
+        // Count listings by neighborhood
+        const neighborhoodCounts = {};
+        this.data.listings.forEach(listing => {
+            if (listing.status === 'active' && listing.location) {
+                const parts = listing.location.split(',').map(s => s.trim());
+                const neighborhood = parts[0] || 'Diğer';
+                neighborhoodCounts[neighborhood] = (neighborhoodCounts[neighborhood] || 0) + 1;
+            }
+        });
+
+        // Sort by count descending
+        const sorted = Object.entries(neighborhoodCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10); // Top 10
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="padding: 20px 0;">Veri yok.</div>';
+            return;
+        }
+
+        const maxCount = sorted[0][1];
+        container.innerHTML = sorted.map(([name, count]) => {
+            const percent = (count / maxCount) * 100;
+            return `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="flex: 1; font-size: 14px; color: #374151;">${name}</div>
+                    <div style="width: 120px; background: #e5e7eb; border-radius: 4px; height: 8px; position: relative;">
+                        <div style="position: absolute; left: 0; top: 0; height: 100%; background: var(--primary); border-radius: 4px; width: ${percent}%;"></div>
+                    </div>
+                    <div style="min-width: 30px; text-align: right; font-weight: 600; color: var(--primary);">${count}</div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    manualSubmitAddListing(e) {
+        if (e) e.preventDefault();
+        if (window.log) window.log("Manual Submit Clicked");
+        const form = document.getElementById('form-add-listing');
+        if (form) {
+            app.addListing(new FormData(form));
+        } else {
+            alert("Form bulunamadı!");
+        }
+    },
+};
+
+// Initialize App
+
+
+// global trigger functions (to ensure accessibility)
+window.triggerEditCustomer = function (id) {
+    if (window.app) {
+        window.app.editCustomer(Number(id));
+    } else {
+        alert("Uygulama yüklenemedi!");
+    }
+};
+
+window.triggerFindMatches = function (id) {
+    console.log("Trigger Find Matches:", id);
+    if (window.app) {
+        window.app.findMatches(Number(id));
+    } else {
+        console.error("App not found!");
+        alert("Uygulama hazır değil.");
+    }
+};
+
+// --- STATUS UPDATE LOGIC ---
+app.toggleListingMenu = function (event, id) {
+    event.stopPropagation(); // Stop card click
+
+    const menu = document.getElementById(`menu-${id}`);
+    const allMenus = document.querySelectorAll('.context-menu-dropdown');
+
+    // Close others
+    allMenus.forEach(m => {
+        if (m.id !== `menu-${id}`) m.classList.remove('active');
+    });
+
+    if (menu) menu.classList.toggle('active');
+};
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.listing-menu-btn') && !e.target.closest('.context-menu-dropdown')) {
+        document.querySelectorAll('.context-menu-dropdown').forEach(m => m.classList.remove('active'));
+    }
+});
+
+app.openAddListingModal = function (id, mode = 'listing') {
+    window.currentAddMode = mode;
+    const title = mode === 'finding' ? 'Yeni Bulum Ekle' : 'Yeni İlan Ekle';
+    const btnText = mode === 'finding' ? 'Bulum Kaydet' : 'Kaydet';
+
+    // Reset form
+    const form = document.getElementById('form-add-listing');
+    if (form) {
+        form.reset();
+        delete form.dataset.editId;
+        localStorage.removeItem('rea_temp_edit_id');
+        window.currentEditId = null;
+    }
+
+    const header = document.querySelector('#modal-add-listing h3');
+    if (header) header.textContent = id ? 'Düzenle' : title;
+
+    const btn = document.querySelector('#form-add-listing button.btn-primary');
+    if (btn) btn.textContent = id ? 'Güncelle' : btnText;
+
+    if (id) {
+        // Handled by openEditListingModal
+        this.openEditListingModal(id);
+    } else {
+        this.modals.open('add-listing');
+    }
+};
+
+app.openEditListingModal = function (id) {
+    let item = this.data.listings.find(x => x.id === id);
+    let mode = 'listing';
+
+    if (!item) {
+        item = this.data.findings.find(x => x.id === id);
+        mode = 'finding';
+    }
+
+    if (!item) return;
+
+    window.currentAddMode = mode;
+    const header = document.querySelector('#modal-add-listing h3');
+    if (header) header.textContent = mode === 'finding' ? 'Bulum Düzenle' : 'İlan Düzenle';
+
+    this.modals.open('add-listing');
+
+    const form = document.getElementById('form-add-listing');
+    if (!form) return;
+
+    localStorage.setItem('rea_temp_edit_id', item.id); // Persistent storage
+    if (window.log) window.log("Edit Open: ID stored=" + item.id);
+
+    form.title.value = item.title;
+    form.price.value = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '';
+
+    // Parse Location
+    if (item.location) {
+        const parts = item.location.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+            const dist = parts[parts.length - 2];
+            const neigh = parts[parts.length - 3];
+
+            const distSelect = document.getElementById('listing-district');
+            if (distSelect && dist) {
+                distSelect.value = dist;
+                if (app.onListingDistrictChange) app.onListingDistrictChange();
+                setTimeout(() => {
+                    const neighSelect = document.getElementById('listing-neighborhood');
+                    if (neighSelect && neigh) neighSelect.value = neigh;
+                }, 50);
+            }
+        }
+    }
+
+    // Set Fields
+    const fields = ['type', 'status', 'rooms', 'size_net', 'size_gross', 'floor_current', 'floor_total', 'building_age', 'damage', 'interior_condition', 'facade', 'deed_status', 'kitchen', 'details', 'external_link', 'owner_name', 'owner_phone'];
+    fields.forEach(f => {
+        if (form[f]) form[f].value = item[f] || '';
+    });
+
+    form.dataset.editId = item.id;
+
+    document.querySelector('#modal-add-listing h3').textContent = 'İlanı Düzenle';
+    document.querySelector('#form-add-listing button[type="submit"]').textContent = 'Güncelle';
+};
+
+app.addListing = function (formData) {
+    try {
+        const mode = window.currentAddMode || 'listing';
+        const targetArray = mode === 'finding' ? app.data.findings : app.data.listings;
+        const targetKey = mode === 'finding' ? 'findings' : 'listings';
+
+        const fileInput = document.getElementById('listing-photos');
+        if (!fileInput) throw new Error("listing-photos element missing");
+        const files = fileInput.files;
+        const form = document.getElementById('form-add-listing');
+        // Storage option: Valid robust retrieval
+        const editId = localStorage.getItem('rea_temp_edit_id');
+        if (window.log) window.log("AddListing: ID from Storage=" + editId);
+
+        const saveItem = (photos = []) => {
+            let finalPhotos = photos;
+
+            let existingIndex = -1;
+            if (editId) {
+                existingIndex = targetArray.findIndex(x => x.id == editId);
+                if (window.log) window.log("Search Result: Index=" + existingIndex + " for ID=" + editId);
+            } else {
+                if (window.log) window.log("Search Skipped: No ID");
+            }
+
+            if (editId) {
+                const existing = targetArray.find(x => x.id == editId);
+                if (existing) {
+                    if (photos.length > 0) {
+                        finalPhotos = [...(existing.photos || []), ...photos];
+                    } else {
+                        finalPhotos = existing.photos || [];
+                    }
+                }
+            }
+
+            const district = document.getElementById('listing-district').value;
+            const neighborhood = document.getElementById('listing-neighborhood').value;
+            const street = formData.get('street') || '';
+            const location = `${neighborhood}, ${district}, Adana`;
+
+            const newItem = {
+                id: editId ? Number(editId) : Date.now(),
+                title: formData.get('title'),
+                price: formData.get('price').replace(/\./g, ''),
+                location: location,
+                street: street,
+                type: formData.get('type'),
+                status: formData.get('status'),
+                rooms: formData.get('rooms'),
+                size_net: formData.get('size_net'),
+                size_gross: formData.get('size_gross'),
+                floor_current: formData.get('floor_current'),
+                floor_total: formData.get('floor_total'),
+                building_age: formData.get('building_age'),
+                damage: formData.get('damage'),
+                interior_condition: formData.get('interior_condition'),
+                facade: formData.get('facade'),
+                deed_status: formData.get('deed_status'),
+                site_features: formData.get('site_features'),
+                kitchen: formData.get('kitchen'),
+                details: formData.get('details'),
+                external_link: formData.get('external_link'),
+                owner_name: formData.get('owner_name'),
+                owner_phone: formData.get('owner_phone'),
+                photos: finalPhotos,
+                date: editId ? (targetArray.find(x => x.id == editId) || {}).date : new Date().toISOString()
+            };
+
+            if (editId) {
+                const idx = targetArray.findIndex(x => x.id == editId);
+                if (idx > -1) targetArray[idx] = newItem;
+
+                delete form.dataset.editId;
+                const header = document.querySelector('#modal-add-listing h3');
+                if (header) header.textContent = 'Yeni İlan Ekle';
+
+                const btn = document.querySelector('#form-add-listing button.btn-primary');
+                if (btn) btn.textContent = 'Kaydet';
+            } else {
+                targetArray.push(newItem);
+            }
+
+            app.saveData(targetKey);
+
+            if (mode === 'finding') {
+                app.renderFindings();
+            } else {
+                app.renderListings();
+                app.updateStats();
+            }
+
+            app.modals.closeAll();
+            localStorage.removeItem('rea_temp_edit_id');
+            form.reset();
+        };
+
+        if (files.length > 0) {
+            const processFile = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = function () {
+                        const img = new Image();
+                        img.src = reader.result;
+                        img.onload = function () {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 1200; // High quality
+                            const scale = Math.min(1, MAX_WIDTH / img.width); // Don't upscale
+                            canvas.width = img.width * scale;
+                            canvas.height = img.height * scale;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.92));
+                        }
+                    }
+                    reader.readAsDataURL(file);
+                });
+            };
+
+            Promise.all(Array.from(files).map(processFile)).then(photos => {
+                saveItem(photos);
+            });
+
+        } else {
+            saveItem([]);
+        }
+    } catch (e) {
+        if (window.log) window.log("ERROR in addListing: " + e.message);
+        alert("CRITICAL ERROR IN ADDLISTING: " + e.message);
+        console.error(e);
+    }
+};
+
+
+// --- LISTING CONTEXT MENU & STATUS LOGIC ---
+app.toggleListingMenu = function (event, id) {
+    event.stopPropagation();
+    // Use relative DOM traversal to avoid duplicate ID issues
+    const card = event.target.closest('.listing-card');
+    const menu = card ? card.querySelector('.context-menu-dropdown') : null;
+    if (menu) {
+        // Close others
+        document.querySelectorAll('.context-menu-dropdown').forEach(m => {
+            if (m !== menu) m.classList.remove('active');
+        });
+        menu.classList.toggle('active');
+    }
+};
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.listing-menu-btn') && !e.target.closest('.context-menu-dropdown')) {
+        document.querySelectorAll('.context-menu-dropdown').forEach(m => m.classList.remove('active'));
+    }
+});
+
+app.addListingNote = function (id, text, color = 'green') {
+    const item = this.data.listings.find(x => x.id == id);
+    if (!item) return;
+
+    const dateStr = new Date().toLocaleDateString('tr-TR');
+    const newNote = `[${dateStr}] ${text}`;
+
+    item.notes = item.notes ? item.notes + '\n' + newNote : newNote;
+    this.saveData('listings');
+    this.renderListings();
+
+    // Color configs
+    const colors = {
+        green: { bg: '#dcfce7', border: '#16a34a', text: '#166534', icon: 'ph-check-circle' },
+        red: { bg: '#fee2e2', border: '#dc2626', text: '#991b1b', icon: 'ph-x-circle' },
+        yellow: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e', icon: 'ph-warning' }
+    };
+    const c = colors[color] || colors.green;
+
+    // Refresh finder-results if modal is open
+    const finderContainer = document.getElementById('finder-results');
+    if (finderContainer && finderContainer.innerHTML) {
+        const card = finderContainer.querySelector(`[onclick*="${id}"]`);
+        if (card) {
+            card.style.boxShadow = `0 0 0 2px ${c.border}`;
+            const notePreview = document.createElement('div');
+            notePreview.style.cssText = `background:${c.bg}; padding:6px 8px; font-size:11px; color:${c.text}; margin-top:8px; border-radius:4px;`;
+            notePreview.innerHTML = `<i class="ph ${c.icon}"></i> ${newNote}`;
+            card.appendChild(notePreview);
+        }
+    }
+};
+
+app.handleStatusUpdate = function (event, id, newStatus) {
+    event.stopPropagation();
+    const menu = document.getElementById(`menu-${id}`);
+    if (menu) menu.classList.remove('active');
+
+    // Feedback Options
+    if (newStatus === 'begenildi' || newStatus === 'sicak_bakiyor' || newStatus === 'begenilmedi' || newStatus === 'fiyat_yuksek') {
+        let label = '';
+        let color = 'green'; // default
+
+        if (newStatus === 'begenildi') { label = '✅ Beğenildi'; color = 'green'; }
+        if (newStatus === 'sicak_bakiyor') { label = '🔥 Sıcak Bakıyor'; color = 'green'; }
+        if (newStatus === 'begenilmedi') { label = '👎 Beğenilmedi'; color = 'red'; }
+        if (newStatus === 'fiyat_yuksek') { label = '📈 Fiyat Yüksek'; color = 'yellow'; }
+
+        const note = prompt(`${label} için notunuz (Opsiyonel):`, "");
+        if (note !== null) {
+            this.addListingNote(id, `${label}: ${note}`, color);
+        }
+        return;
+    }
+
+    if (newStatus === 'cancelled') {
+        if (confirm('Bu ilanı "İptal/Vazgeçildi" olarak işaretlemek istediğinize emin misiniz?')) {
+            this.updateListingStatus(id, 'cancelled', 0, 'İptal edildi');
+        }
+        return;
+    }
+
+    // Open Modal for Sold/Deposit
+    const modalId = 'modal-status-update';
+    document.getElementById('status-update-id').value = id;
+    document.getElementById('status-update-type').value = newStatus;
+
+    const titleEl = document.getElementById('status-modal-title');
+    const listing = this.data.listings.find(l => l.id == id);
+    const listingPrice = listing ? parseInt(listing.price).toLocaleString('tr-TR') : '0';
+
+    if (newStatus === 'sold') {
+        titleEl.textContent = 'Satış Bilgisi Giriniz';
+        document.getElementById('status-final-price').placeholder = listingPrice;
+    } else {
+        titleEl.textContent = 'Kapora Bilgisi Giriniz';
+        document.getElementById('status-final-price').placeholder = 'Kapora tutarı...';
+    }
+
+    // Clear previous inputs
+    document.getElementById('status-final-price').value = '';
+    document.getElementById('status-notes').value = '';
+
+    // Set Default Date to Today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('status-date').value = today;
+
+    this.modals.open('status-update');
+};
+
+app.updateListingStatus = function (id, status, price, notes, date) {
+    const listingIndex = this.data.listings.findIndex(l => l.id == id);
+    if (listingIndex > -1) {
+        const listing = this.data.listings[listingIndex];
+
+        // Update fields
+        listing.status = status;
+        listing.final_price = price;
+        listing.status_notes = notes;
+        listing.status_date = date ? new Date(date).toISOString() : new Date().toISOString();
+
+        this.saveData('listings');
+        this.renderListings();
+        this.updateStats();
+        this.modals.closeAll();
+    }
+};
+
+// Form Handler (Ensure duplicate listener check if necessary, or just add it safely)
+// Since this is inside app.js body which runs once, it's fine.
+const statusForm = document.getElementById('form-status-update');
+if (statusForm) {
+    // Clone to remove old listeners to prevent duplicates if app.js reloaded (hacky but safe)
+    const newForm = statusForm.cloneNode(true);
+    statusForm.parentNode.replaceChild(newForm, statusForm);
+    newForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const id = Number(document.getElementById('status-update-id').value);
+        const status = document.getElementById('status-update-type').value;
+        const priceStr = document.getElementById('status-final-price').value;
+        const price = parseInt(priceStr.replace(/\./g, '')) || 0;
+        const notes = document.getElementById('status-notes').value;
+        const date = document.getElementById('status-date').value;
+
+        app.updateListingStatus(id, status, price, notes, date);
+    });
+}
+
+
+// --- RESTORED FSBO RENDER LOGIC ---
+app.renderFsboList = function () {
+    const container = document.getElementById('fsbo-list');
+    const renewedContainer = document.getElementById('fsbo-renewed-list');
+    const renewedSection = document.getElementById('fsbo-renewed-section');
+    const renewedCount = document.getElementById('fsbo-renewed-count');
+    const statsContainer = document.getElementById('fsbo-stats');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (renewedContainer) renewedContainer.innerHTML = '';
+
+    const items = this.data.fsbo || [];
+    if (items.length === 0) {
+        container.innerHTML = '<div class="empty-state">Henüz kayıtlı FSBO fırsatı yok.</div>';
+        if (statsContainer) statsContainer.innerHTML = '';
+        if (renewedSection) renewedSection.style.display = 'none';
+        return;
+    }
+
+    // Separate renewed from regular listings
+    const renewedListings = items.filter(item => item.status && item.status.includes('Yenilemiş'));
+    const regularListings = items.filter(item => !item.status || !item.status.includes('Yenilemiş'));
+
+    // Calculate statistics
+    const stats = {};
+    items.forEach(item => {
+        const status = item.status || 'Belirtilmemiş';
+        stats[status] = (stats[status] || 0) + 1;
+    });
+
+    // Render statistics
+    if (statsContainer) {
+        const total = items.length;
+        const statsParts = [`<strong>Toplam:</strong> ${total}`];
+        Object.keys(stats).sort().forEach(status => {
+            statsParts.push(`<strong>${status}:</strong> ${stats[status]}`);
+        });
+        statsContainer.innerHTML = statsParts.join(' | ');
+    }
+
+    // Update renewed section visibility and count
+    if (renewedSection) {
+        if (renewedListings.length > 0) {
+            renewedSection.style.display = 'block';
+            if (renewedCount) renewedCount.textContent = renewedListings.length;
+        } else {
+            renewedSection.style.display = 'none';
+        }
+    }
+
+    // Sort: Earliest end_date first
+    const sortFn = (a, b) => {
+        if (!a.end_date && !b.end_date) return 0;
+        if (!a.end_date) return 1;
+        if (!b.end_date) return -1;
+        return new Date(a.end_date) - new Date(b.end_date);
+    };
+    const sortedRegular = [...regularListings].sort(sortFn);
+    const sortedRenewed = [...renewedListings].sort(sortFn);
+
+    // Helper to create card
+    const createFsboCard = (item) => {
+        const card = document.createElement('div');
+        card.className = 'listing-card';
+
+        let statusColor = '#64748b'; // gray
+        if (item.status && item.status.includes('Randevu')) statusColor = '#d97706'; // orange
+        if (item.status && item.status.includes('Olumsuz')) statusColor = '#991b1b'; // red
+        if (item.status && item.status.includes('Portföy')) statusColor = '#16a34a'; // green
+
+        // Photo handling
+        let photoArray = [];
+        if (item.photos && Array.isArray(item.photos)) photoArray = item.photos;
+        else if (item.photo) photoArray = [item.photo];
+
+        let galleryHtml = '';
+        if (photoArray.length > 0) {
+            const photosInner = photoArray.map(src =>
+                `<img src="${src}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox('${src}')">`
+            ).join('');
+            galleryHtml = `<div style="display:flex; gap:5px; margin-bottom:10px; overflow-x:auto; padding-bottom:5px;">${photosInner}</div>`;
+        }
+
+        card.innerHTML = `
+            <div class="card-content" style="padding:15px;">
+                <div style="display:flex; gap:15px;">
+                    <div style="flex:1;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:5px;">
+                            <div>
+                                <h4 style="margin:0; font-size:16px;">${item.owner || '?'}</h4>
+                                <div style="font-size:12px; color:#64748b;">${item.district || ''} / ${item.neighborhood || ''}</div>
+                            </div>
+                            <span class="badge" style="background:${statusColor}; color:white; font-size:11px; padding:2px 6px; border-radius:4px;">${item.status || '-'}</span>
+                        </div>
+                        
+                        <div style="font-size:15px; color:#1e293b; font-weight:700; margin-bottom:5px;">
+                            ${parseInt(item.price || 0).toLocaleString('tr-TR')} TL
+                        </div>
+                        
+                        ${(item.rooms || item.floor_current || item.building_age || item.building_name) ? `
+                        <div style="font-size:11px; color:#475569; margin-bottom:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                            ${item.rooms ? `<span style="background:#e0f2fe; padding:2px 6px; border-radius:4px;"><i class="ph ph-house"></i> ${item.rooms}</span>` : ''}
+                            ${item.floor_current ? `<span style="background:#fef3c7; padding:2px 6px; border-radius:4px;"><i class="ph ph-stairs"></i> ${item.floor_current}${item.floor_total ? '/' + item.floor_total : ''}</span>` : ''}
+                            ${item.building_age ? `<span style="background:#f1f5f9; padding:2px 6px; border-radius:4px;"><i class="ph ph-calendar-blank"></i> ${item.building_age} yaş</span>` : ''}
+                            ${item.building_name ? `<span style="background:#fce7f3; padding:2px 6px; border-radius:4px;"><i class="ph ph-buildings"></i> ${item.building_name}</span>` : ''}
+                        </div>` : ''}
+                        
+                        <div style="font-size:12px; color:#64748b; display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                            ${item.start_date ? `<span><i class="ph ph-calendar-plus"></i> ${new Date(item.start_date).toLocaleDateString('tr-TR')}</span>` : ''}
+                            ${item.end_date ? `<span style="color:#d97706"><i class="ph ph-calendar-x"></i> ${new Date(item.end_date).toLocaleDateString('tr-TR')}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+
+                ${galleryHtml}
+                
+                <div style="margin:10px 0; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                     <div style="margin-bottom:8px; font-size:13px; color:#334155;">
+                        <i class="ph ph-phone" style="vertical-align:middle; color:#64748b"></i> ${item.phone || '-'}
+                    </div>
+
+                    ${item.link ? `
+                    <div style="margin-bottom:8px;">
+                        <a href="${item.link}" target="_blank" style="color:var(--primary); font-size:13px; text-decoration:underline;">
+                            İlana Git <i class="ph ph-arrow-square-out"></i>
+                        </a>
+                    </div>` : ''}
+                    
+                    ${item.notes ? `
+                    <div onclick="this.style.webkitLineClamp = this.style.webkitLineClamp ? '' : 'inherit'; this.style.display = this.style.display === 'block' ? '-webkit-box' : 'block'" 
+                         style="background:#f8fafc; padding:8px; border-radius:4px; font-size:12px; color:#475569; font-style:italic; cursor:pointer; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">
+                        "${item.notes}"
+                    </div>` : ''}
+                </div>
+                
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                     <button class="btn btn-sm btn-outline" onclick="app.deleteFsbo('${item.id}')" title="Sil"><i class="ph ph-trash" style="color:#ef4444;"></i></button>
+                     <button class="btn btn-sm btn-outline" onclick="app.populateEditFsbo('${item.id}')" title="Düzenle"><i class="ph ph-pencil-simple" style="color:var(--primary);"></i></button>
+                     <button class="btn btn-sm btn-outline" onclick="app.renewFsboListing('${item.id}')" title="İlanı Yenile" style="color:#16a34a; border-color:#16a34a;"><i class="ph ph-arrows-clockwise"></i></button>
+                     <button class="btn btn-sm btn-outline" onclick="app.openFsboStatusModal('${item.id}')" style="color:var(--dark); border-color:#cbd5e1;">Durum</button>
+                     <button class="btn btn-sm btn-primary" style="flex:1" onclick="window.open('tel:${item.phone}', '_self')">Ara</button>
+                </div>
+            </div>`;
+        return card;
+    };
+
+    if (sortedRegular.length > 0) {
+        sortedRegular.forEach(item => container.appendChild(createFsboCard(item)));
+    } else {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px;">Tüm ilanlar yenilenmiş durumda.</div>';
+    }
+
+    if (renewedContainer && sortedRenewed.length > 0) {
+        sortedRenewed.forEach(item => renewedContainer.appendChild(createFsboCard(item)));
+    }
+};
+
+app.renewFsboListing = function (id) {
+    const item = this.data.fsbo.find(x => x.id === id);
+    if (!item) return;
+
+    if (!item.dateHistory) item.dateHistory = [];
+    if (item.start_date && item.end_date) {
+        item.dateHistory.push({ start: item.start_date, end: item.end_date });
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const oneMonthLater = new Date(today);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    const endStr = oneMonthLater.toISOString().split('T')[0];
+
+    item.start_date = todayStr;
+    item.end_date = endStr;
+    item.status = 'İlanı Yenilemiş';
+
+    this.saveData('fsbo');
+    this.renderFsboList();
+    alert("İlan Yenilendi!");
+};
+
+app.openFsboStatusModal = function (id) {
+    document.getElementById('fsbo-status-id').value = id;
+    this.modals.open('fsbo-status');
+};
+
+app.setFsboStatus = function (status) {
+    const id = document.getElementById('fsbo-status-id').value;
+    const item = this.data.fsbo.find(x => x.id === id);
+    if (item) {
+        item.status = status;
+        this.saveData('fsbo');
+        this.renderFsboList();
+        this.modals.closeAll();
+
+        // If status is "Portföyümüze Eklendi", maybe offer to create a real listing?
+        // For now just update status.
+    }
+};
+
+app.populateEditFsbo = function (id) {
+    const item = this.data.fsbo.find(x => x.id === id);
+    if (!item) return;
+
+    // Open modal
+    this.modals.open('add-fsbo');
+
+    // Fill form
+    const form = document.getElementById('form-add-fsbo');
+    form.owner.value = item.owner;
+    form.phone.value = item.phone || '';
+    form.price.value = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '';
+    form.link.value = item.link || '';
+    form.status.value = item.status;
+    form.notes.value = item.notes || '';
+    form.district.value = item.district || '';
+
+    // Trigger district change to populate neighborhoods, then select neighborhood
+    app.onFsboDistrictChange();
+    if (item.neighborhood) {
+        setTimeout(() => {
+            document.getElementById('fsbo-neighborhood').value = item.neighborhood;
+        }, 50);
+    }
+
+    form.start_date.value = item.start_date || '';
+    form.end_date.value = item.end_date || '';
+
+    // Store ID for update
+    form.dataset.editId = item.id;
+
+    // Change Title/Button
+    document.querySelector('#modal-add-fsbo h3').textContent = 'FSBO Düzenle';
+    document.querySelector('#form-add-fsbo button[type="submit"]').textContent = 'Güncelle';
+};
+
+app.addFsbo = function (formData) {
+    const fileInput = document.getElementById('fsbo-photo-input');
+    const files = fileInput && fileInput.files;
+    const form = document.getElementById('form-add-fsbo');
+    const editId = form.dataset.editId; // Get ID if editing
+
+    const saveItem = (photos = []) => {
+        let finalPhotos = photos;
+
+        // If editing and no new photos selected, keep old ones
+        if (editId && (!photos || photos.length === 0)) {
+            const existing = this.data.fsbo.find(x => x.id === editId);
+            if (existing) finalPhotos = existing.photos || (existing.photo ? [existing.photo] : []);
+        } else if (editId && photos.length > 0) {
+            // Merge new photos with existing
+            const existing = this.data.fsbo.find(x => x.id === editId);
+            if (existing && existing.photos) {
+                finalPhotos = [...existing.photos, ...photos];
+            } else if (existing && existing.photo) {
+                finalPhotos = [existing.photo, ...photos];
+            }
+        }
+
+        const newItem = {
+            id: editId || 'fsbo_' + Date.now(),
+            owner: formData.get('owner'),
+            district: formData.get('district'),
+            neighborhood: formData.get('neighborhood'),
+            phone: formData.get('phone'),
+            price: formData.get('price') ? formData.get('price').replace(/\./g, '') : 0,
+            link: formData.get('link'),
+            status: formData.get('status'),
+            notes: formData.get('notes'),
+            start_date: formData.get('start_date'),
+            end_date: formData.get('end_date'),
+            // New property detail fields
+            rooms: formData.get('rooms'),
+            floor_current: formData.get('floor_current'),
+            floor_total: formData.get('floor_total'),
+            building_age: formData.get('building_age'),
+            building_name: formData.get('building_name'),
+            photos: finalPhotos,
+            date: new Date().toISOString()
+        };
+
+        if (!this.data.fsbo) this.data.fsbo = [];
+
+        if (editId) {
+            const idx = this.data.fsbo.findIndex(x => x.id === editId);
+            if (idx > -1) this.data.fsbo[idx] = newItem;
+            // Reset UI state
+            delete form.dataset.editId;
+            document.querySelector('#modal-add-fsbo h3').textContent = 'Yeni FSBO Fırsatı';
+            document.querySelector('#form-add-fsbo button[type="submit"]').textContent = 'Kaydet';
+        } else {
+            this.data.fsbo.push(newItem);
+        }
+
+        this.saveData('fsbo');
+        this.renderFsboList();
+        this.modals.closeAll();
+        form.reset();
+    };
+
+    if (files && files.length > 0) {
+        const processFile = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = function () {
+                    const img = new Image();
+                    img.src = reader.result;
+                    img.onload = function () {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1200; // High quality
+                        const scale = Math.min(1, MAX_WIDTH / img.width); // Don't upscale
+                        canvas.width = img.width * scale;
+                        canvas.height = img.height * scale;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.92));
+                    };
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
+        // Limit to 5 photos
+        const filesToProcess = Array.from(files).slice(0, 5);
+        Promise.all(filesToProcess.map(processFile)).then(photos => {
+            saveItem(photos);
+        });
+    } else {
+        saveItem([]);
+    }
+};
+
+app.deleteFsbo = function (id) {
+    if (confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
+        this.data.fsbo = this.data.fsbo.filter(x => x.id !== id);
+        this.saveData('fsbo');
+        this.renderFsboList();
+    }
+};
+
+// --- RESTORED SMART FSBO & OCR FEATURES ---
+app.fsboPhotos = [];
+
+app.initFsboPhotos = function () {
+    this.fsboPhotos = [];
+    const preview = document.getElementById('fsbo-image-preview');
+    if (preview) preview.innerHTML = '';
+    const input = document.getElementById('fsbo-photo-input');
+    if (input) input.value = '';
+    const smartText = document.getElementById('fsbo-smart-text');
+    if (smartText) smartText.value = '';
+};
+
+app.handleFsboImagePaste = function (e) {
+    if (e.target.tagName === 'TEXTAREA') return;
+    e.preventDefault();
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    let found = false;
+    for (let index in items) {
+        const item = items[index];
+        if (item.kind === 'file' && item.type.includes('image/')) {
+            const blob = item.getAsFile();
+            this.addFsboPhoto(blob);
+            found = true;
+        }
+    }
+    if (!found) {
+        if (window.console) console.log("No image found in paste");
+    }
+};
+
+app.handleFsboFileSelect = function (input) {
+    if (input.files) {
+        Array.from(input.files).forEach(file => this.addFsboPhoto(file));
+    }
+};
+
+app.addFsboPhoto = function (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = e.target.result;
+        if (this.fsboPhotos.length >= 10) {
+            alert("En fazla 10 fotoğraf ekleyebilirsiniz.");
+            return;
+        }
+        this.fsboPhotos.push(base64);
+        this.renderFsboImagePreview();
+    };
+    reader.readAsDataURL(file);
+};
+
+app.renderFsboImagePreview = function () {
+    const container = document.getElementById('fsbo-image-preview');
+    if (!container) return;
+    container.innerHTML = this.fsboPhotos.map((src, index) => `
+        <div style="position: relative; width: 100%; height: 80px; border-radius: 4px; overflow: hidden; border: 1px solid #ddd; background:white;">
+            <img src="${src}" style="width: 100%; height: 100%; object-fit: contain;">
+            <button onclick="event.stopPropagation(); app.removeFsboPhoto(${index})" style="position: absolute; top: 0; right: 0; background: rgba(220, 38, 38, 0.9); color: white; border: none; width: 22px; height: 22px; cursor: pointer; border-radius: 0 0 0 4px;">&times;</button>
+        </div>
+    `).join('');
+};
+
+app.removeFsboPhoto = function (index) {
+    this.fsboPhotos.splice(index, 1);
+    this.renderFsboImagePreview();
+};
+
+app.parseFsboText = function () {
+    const text = document.getElementById('fsbo-smart-text').value;
+    if (!text) {
+        alert("Lütfen önce bir ilan metni yapıştırın.");
+        return;
+    }
+
+    let parsedCount = 0;
+
+    // 0. Always append to Notes
+    const notesField = document.querySelector('#form-add-fsbo textarea[name="notes"]');
+    if (notesField && !notesField.value.includes(text)) {
+        const separator = notesField.value ? "\n\n--- İlan Detayları ---\n" : "";
+        notesField.value += separator + text;
+        parsedCount++;
+    }
+
+    // 1. Price
+    const priceMatch =
+        text.match(/(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:TL|tl|₺)/) ||
+        text.match(/(\d{1,3}(?:\.\d{3})*)\s*TL/i) ||
+        text.match(/(\d+)\s*(?:bin|milyon|m)/i);
+
+    if (priceMatch) {
+        let p = priceMatch[1].replace(/\./g, '').replace(/,/g, '.');
+        let formPrice = document.querySelector('#form-add-fsbo input[name="price"]');
+        if (formPrice) {
+            formPrice.value = parseInt(p).toLocaleString('tr-TR');
+            parsedCount++;
+        }
+    }
+
+    // 2. District/Neighborhood (Simple version)
+    // Full logic requires adanaLocations iteration which might be heavy or complex to restore perfectly here.
+    // relying on user manual entry or simplified check if crucial functionality needed.
+    // Restoring basic logic:
+    if (this.adanaLocations) {
+        let foundDistrict = '';
+        let foundNeighborhood = '';
+
+        for (const [distName, distData] of Object.entries(this.adanaLocations)) {
+            if (text.toLowerCase().includes(distName.toLowerCase())) foundDistrict = distName;
+            for (const [neighName] of Object.entries(distData.neighborhoods)) {
+                if (text.toLowerCase().includes(neighName.toLowerCase())) {
+                    foundNeighborhood = neighName;
+                    if (!foundDistrict) foundDistrict = distName;
+                }
+            }
+        }
+
+        const distSelect = document.getElementById('fsbo-district');
+        const neighSelect = document.getElementById('fsbo-neighborhood');
+
+        if (foundDistrict && distSelect) {
+            distSelect.value = foundDistrict;
+            this.onFsboDistrictChange();
+            setTimeout(() => {
+                if (foundNeighborhood && neighSelect) neighSelect.value = foundNeighborhood;
+            }, 100);
+            parsedCount++;
+        }
+    }
+
+    // 3. Phone
+    const phoneMatch = text.match(/(0?5\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
+    if (phoneMatch) {
+        const phoneInput = document.querySelector('#form-add-fsbo input[name="phone"]');
+        if (phoneInput) {
+            phoneInput.value = phoneMatch[1];
+            parsedCount++;
+        }
+    }
+
+    // 5. Date Parsing
+    let foundDate = null;
+    if (text.toLowerCase().includes('bugün')) foundDate = new Date().toISOString().split('T')[0];
+
+    // Set Date
+    const dateInput = document.querySelector('#form-add-fsbo input[name="start_date"]');
+    const endDateInput = document.querySelector('#form-add-fsbo input[name="end_date"]');
+
+    if (dateInput) {
+        let finalDate = foundDate || new Date().toISOString().split('T')[0];
+        dateInput.value = finalDate;
+        parsedCount++;
+
+        if (endDateInput) {
+            const startDateObj = new Date(finalDate);
+            startDateObj.setMonth(startDateObj.getMonth() + 1);
+            endDateInput.value = startDateObj.toISOString().split('T')[0];
+        }
+    }
+
+    // Feedback
+    const btn = document.querySelector('#form-add-fsbo button[onclick="app.parseFsboText()"]');
+    if (btn) {
+        const originalText = btn.innerHTML;
+        if (parsedCount > 0) {
+            btn.innerHTML = '<i class="ph ph-check"></i> Bilgiler İşlendi!';
+            btn.style.background = "#dcfce7";
+            btn.style.color = "#166534";
+        } else {
+            btn.innerHTML = '<i class="ph ph-warning"></i> Net Bilgi Bulunamadı (Notlara Eklendi)';
+            btn.style.background = "#fffbeb";
+        }
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = "";
+            btn.style.color = "";
+        }, 2000);
+    }
+};
+
+app.toggleOcrMode = function () {
+    const textMode = document.getElementById('smart-paste-text-mode');
+    const ocrMode = document.getElementById('smart-paste-ocr-mode');
+    if (!textMode || !ocrMode) return;
+
+    if (textMode.style.display === 'none') {
+        textMode.style.display = 'block';
+        ocrMode.style.display = 'none';
+        document.getElementById('btn-ocr-toggle').textContent = '📸 Ekran Görüntüsü ile Ekle';
+    } else {
+        textMode.style.display = 'none';
+        ocrMode.style.display = 'block';
+        document.getElementById('btn-ocr-toggle').textContent = '📝 Metin ile Ekle';
+    }
+};
+
+app.handleOcrPaste = function (e) {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let index in items) {
+        const item = items[index];
+        if (item.kind === 'file' && item.type.includes('image/')) {
+            const blob = item.getAsFile();
+            this.runOcr(blob);
+        }
+    }
+};
+
+app.runOcr = function (blob) {
+    const status = document.getElementById('ocr-status');
+    if (status) status.innerHTML = 'Okunuyor... <div class="spinner"></div>';
+
+    // Simulations since we don't have Tesseract.js bundled locally properly or network
+    // Just simulating a delay and saying "Feature unavailable offline" or similar?
+    // User had Tesseract CDN in HTML?
+
+    if (typeof Tesseract !== 'undefined') {
+        Tesseract.recognize(
+            blob,
+            'tur',
+            { logger: m => { if (status) status.textContent = `Okunuyor... %${Math.round(m.progress * 100)}`; } }
+        ).then(({ data: { text } }) => {
+            if (status) status.innerHTML = 'Okuma Tamamlandı! ✨';
+            const textArea = document.getElementById('fsbo-smart-text');
+            if (textArea) {
+                textArea.value = text;
+                app.parseFsboText();
+                app.addFsboPhoto(blob); // Also add the image
+            }
+        }).catch(err => {
+            if (status) status.innerHTML = 'Hata: ' + err.message;
+        });
+    } else {
+        if (status) status.innerHTML = "OCR Kütüphanesi Yüklenemedi.";
+    }
+};
+
+// Initialize App
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        if (window.log) window.log("App Init Starting...");
+        if (typeof app !== 'undefined') {
+            window.app = app;
+            app.init();
+
+            // One-time Migration: Huzur -> Huzurevleri
+            if (!localStorage.getItem('migration_huzur_done')) {
+                let updated = 0;
+                app.data.listings.forEach(item => {
+                    if (item.location && item.location.includes('Huzur') && !item.location.includes('Huzurevleri')) {
+                        item.location = item.location.replace('Huzur', 'Huzurevleri');
+                        updated++;
+                    }
+                });
+                if (updated > 0) {
+                    app.saveData('listings');
+                    app.renderListings();
+                    console.log(`Migration: ${updated} ilan güncellendi (Huzur -> Huzurevleri)`);
+                }
+                localStorage.setItem('migration_huzur_done', 'true');
+            }
+        } else {
+            console.error("FATAL: 'app' constant is undefined at DOMContentLoaded");
+        }
+        if (window.log) window.log("App Init Completed");
+    } catch (e) {
+        alert("CRITICAL ERROR IN INIT: " + e.message);
+        console.error(e);
+    }
+});
+
+

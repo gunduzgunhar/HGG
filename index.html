@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Emlak Asistanı Premium - v079</title>
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            var d = document.getElementById('debug-log');
+            if (d) {
+                d.innerHTML += "<div style='background:yellow; color:black; border:1px solid black; margin:2px;'>ERROR: " + msg + " (Line: " + line + ")</div>";
+            } else {
+                // alert("Error: " + msg + "\nLine: " + line); // Fallback
+            }
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function (event) {
+            var d = document.getElementById('debug-log');
+            if (d) d.innerHTML += "<div style='background:orange; color:black'>PROMISE ERROR: " + event.reason + "</div>";
+        });
+    </script>
+    <!-- Google Fonts: Outfit for a premium look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Cloudflare link for Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Phosphor Icons for modern icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Cloudflare link for Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- OCR Library -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <link rel="stylesheet" href="style.css?v=force_reload_004">
+</head>
+
+<body>
+
+    <body>
+        <div class="app-container">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="logo-area">
+                    <i class="ph-fill ph-house-line logo-icon"></i>
+                    <h1>Emlak<span class="highlight">Pro</span></h1>
+                </div>
+
+                <nav class="main-nav">
+                    <button class="nav-item active" data-target="dashboard">
+                        <i class="ph ph-squares-four"></i>
+                        <span>Panel</span>
+                    </button>
+                    <button class="nav-item" data-target="listings">
+                        <i class="ph ph-buildings"></i>
+                        <span>İlanlar</span>
+                    </button>
+                    <button class="nav-item" data-target="findings">
+                        <i class="ph ph-magnifying-glass-plus"></i>
+                        <span>Bulumlar</span>
+                    </button>
+                    <button class="nav-item" data-target="map">
+                        <i class="ph ph-map-trifold"></i>
+                        <span>Harita</span>
+                    </button>
+                    <button class="nav-item" data-target="crm">
+                        <i class="ph ph-users"></i>
+                        <span>Müşteriler</span>
+                    </button>
+                    <button class="nav-item" data-target="owners">
+                        <i class="ph ph-house-line"></i>
+                        <span>Mülk Sahipleri</span>
+                    </button>
+                    <button class="nav-item" data-target="calendar">
+                        <i class="ph ph-calendar-check"></i>
+                        <span>Ajanda</span>
+                    </button>
+                    <button class="nav-item" data-target="fsbo">
+                        <i class="ph ph-binoculars"></i>
+                        <span>FSBO (Sahibinden)</span>
+                    </button>
+                </nav>
+
+                <div class="user-profile">
+                    <div class="avatar">
+                        <i class="ph ph-user"></i>
+                    </div>
+                    <div class="user-info">
+                        <span class="name">Kullanıcı</span>
+                        <span class="role">Emlak Danışmanı</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="main-content">
+                <header class="top-header">
+                    <h2 id="page-title">Genel Bakış</h2>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" id="quick-add-btn"
+                            onclick="app.openAddListingModal(null, 'listing')">
+                            <i class="ph ph-plus"></i> Hızlı Ekle
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Views Container -->
+                <div id="views-container">
+
+                    <!-- DASHBOARD VIEW -->
+                    <section id="dashboard" class="view active">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="icon-box blue">
+                                    <i class="ph ph-house"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="label">Aktif İlanlar</span>
+                                    <span class="value" id="stat-active-listings">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="icon-box green">
+                                    <i class="ph ph-currency-circle-dollar"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="label">Bu Ay Satılan</span>
+                                    <span class="value" id="stat-sold">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="icon-box purple">
+                                    <i class="ph ph-users-three"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="label">Müşteriler</span>
+                                    <span class="value" id="stat-customers">0</span>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="icon-box orange">
+                                    <i class="ph ph-house-line"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="label">Mülk Sahipleri</span>
+                                    <span class="value" id="stat-owners">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-content">
+                            <div class="recent-listings" style="flex:1">
+                                <h3>Son Eklenenler</h3>
+                                <div class="empty-state">Henüz ilan eklenmedi.</div>
+                            </div>
+                            <div class="neighborhood-stats"
+                                style="flex:1; background:white; padding:20px; border-radius:12px; border:1px solid var(--border)">
+                                <h3>Bölge Analizi</h3>
+                                <div id="neighborhood-stats-list"
+                                    style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
+                                    <div class="empty-state" style="padding: 20px 0;">Veri yok.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- LISTINGS VIEW -->
+                    <section id="listings" class="view">
+                        <div class="filter-bar" style="flex-wrap: wrap; gap: 10px;">
+                            <input type="text" placeholder="İlan ara..." class="search-input"
+                                style="flex: 2; min-width: 200px;">
+
+                            <select class="filter-select" id="list-filter-district"
+                                onchange="app.onListFilterDistrictChange()" style="flex:1; min-width: 120px;">
+                                <option value="">Tüm İlçeler</option>
+                                <option value="Seyhan">Seyhan</option>
+                                <option value="Çukurova">Çukurova</option>
+                                <option value="Yüreğir">Yüreğir</option>
+                                <option value="Sarıçam">Sarıçam</option>
+                            </select>
+
+                            <select class="filter-select" id="list-filter-neighborhood" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="">Tüm Mahalleler</option>
+                            </select>
+
+                            <select class="filter-select" id="list-filter-rooms" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="">Tüm Odalar</option>
+                                <option value="1+0">1+0</option>
+                                <option value="1+1">1+1</option>
+                                <option value="2+1">2+1</option>
+                                <option value="3+1">3+1</option>
+                                <option value="4+1">4+1</option>
+                                <option value="5+1">5+1</option>
+                                <option value="6+1">6+1</option>
+                                <option value="Villa">Villa</option>
+                            </select>
+
+                            <select class="filter-select" id="list-filter-damage" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="all">Hasar Durumu: Tümü</option>
+                                <option value="Hasarsız">Hasarsız</option>
+                                <option value="Az Hasarlı">Az Hasarlı</option>
+                                <option value="Orta Hasarlı">Orta Hasarlı</option>
+                                <option value="Ağır Hasarlı">Ağır Hasarlı</option>
+                                <option value="Azdan Az Hasarlı">Azdan Az Hasarlı</option>
+                                <option value="Azdan Hasarsız">Azdan Hasarsız</option>
+                                <option value="Ortadan Az Hasarlı">Ortadan Az Hasarlı</option>
+                                <option value="Ortadan Hasarsız">Ortadan Hasarsız</option>
+                            </select>
+                            <select class="filter-select" id="list-filter-facade" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="all">Cephe: Tümü</option>
+                                <optgroup label="Tek Cephe">
+                                    <option value="K (Kuzey)">K (Kuzey)</option>
+                                    <option value="G (Güney)">G (Güney)</option>
+                                    <option value="D (Doğu)">D (Doğu)</option>
+                                    <option value="B (Batı)">B (Batı)</option>
+                                </optgroup>
+                                <optgroup label="Çift Cephe">
+                                    <option value="KD (Kuzey-Doğu)">KD (Kuzey-Doğu)</option>
+                                    <option value="KB (Kuzey-Batı)">KB (Kuzey-Batı)</option>
+                                    <option value="GD (Güney-Doğu)">GD (Güney-Doğu)</option>
+                                    <option value="GB (Güney-Batı)">GB (Güney-Batı)</option>
+                                    <option value="KG (Kuzey-Güney)">KG (Kuzey-Güney)</option>
+                                    <option value="DB (Doğu-Batı)">DB (Doğu-Batı)</option>
+                                </optgroup>
+                                <optgroup label="3 Cephe">
+                                    <option value="KGD (Kuzey-Güney-Doğu)">KGD (Kuzey-Güney-Doğu)</option>
+                                    <option value="KGB (Kuzey-Güney-Batı)">KGB (Kuzey-Güney-Batı)</option>
+                                    <option value="KDB (Kuzey-Doğu-Batı)">KDB (Kuzey-Doğu-Batı)</option>
+                                    <option value="GDB (Güney-Doğu-Batı)">GDB (Güney-Doğu-Batı)</option>
+                                </optgroup>
+                                <option value="4 Cephe">4 Cephe (Tam)</option>
+                            </select>
+                            <select class="filter-select" id="list-filter-deed" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="all">Tapu: Tümü</option>
+                                <option value="Kat Mülkiyetli">Kat Mülkiyetli</option>
+                                <option value="Kat İrtifaklı">Kat İrtifaklı</option>
+                            </select>
+
+                            <select class="filter-select" id="list-filter-type" onchange="app.renderListings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="all">Tüm İlanlar</option>
+                                <option value="sale">Satılık</option>
+                                <option value="rent">Kiralık</option>
+                                <option value="passive">Pasif</option>
+                            </select>
+                        </div>
+                        <div id="listings-stats"
+                            style="margin-bottom: 15px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 13px; color: #475569;">
+                        </div>
+                        <div class="listings-grid" id="listings-grid">
+                            <!-- Listings will be injected here via JS -->
+                            <div class="empty-state">
+                                <i class="ph ph-file-search"></i>
+                                <p>Henüz ilanınız yok.</p>
+                                <button class="btn btn-secondary"
+                                    onclick="app.openAddListingModal(null, 'listing')">İlan Ekle</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- FINDINGS VIEW -->
+                    <section id="findings" class="view">
+                        <div class="view-header"
+                            style="justify-content:space-between; display:flex; margin-bottom:20px;">
+                            <h3>Bulumlar (Fırsatlar)</h3>
+                            <button class="btn btn-primary" onclick="app.openAddListingModal(null, 'finding')">
+                                <i class="ph ph-plus"></i> Bulum Ekle
+                            </button>
+                        </div>
+                        <div class="listings-grid" id="findings-grid">
+                            <div class="empty-state">
+                                <i class="ph ph-magnifying-glass-plus"></i>
+                                <p>Henüz bulum eklenmedi.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- FSBO VIEW -->
+                    <section id="fsbo" class="view">
+                        <div class="view-header"
+                            style="justify-content:space-between; display:flex; margin-bottom:20px;">
+                            <h3>FSBO Fırsat Listesi</h3>
+                            <button class="btn btn-primary" onclick="app.modals.open('add-fsbo')">
+                                <i class="ph ph-plus"></i> Yeni FSBO Ekle
+                            </button>
+                        </div>
+                        <div id="fsbo-stats"
+                            style="margin-bottom: 15px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 13px; color: #475569;">
+                        </div>
+                        <div class="listings-grid" id="fsbo-list"
+                            style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                            <!-- FSBO cards will be injected here -->
+                        </div>
+
+                        <!-- Renewed Listings Section - Collapsible -->
+                        <div id="fsbo-renewed-section" style="margin-top: 25px; display: none;">
+                            <details style="background: #f1f5f9; border-radius: 8px; padding: 10px 15px;">
+                                <summary
+                                    style="cursor: pointer; font-weight: 600; color: #475569; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="ph ph-arrows-clockwise" style="color: #16a34a;"></i>
+                                    <span>İlanı Yenilenmiş</span>
+                                    <span id="fsbo-renewed-count"
+                                        style="background: #16a34a; color: white; font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-left: 5px;">0</span>
+                                </summary>
+                                <div class="listings-grid" id="fsbo-renewed-list"
+                                    style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); margin-top: 15px;">
+                                    <!-- Renewed FSBO cards will be injected here -->
+                                </div>
+                            </details>
+                        </div>
+                    </section>
+
+                    <!-- MAP VIEW -->
+                    <section id="map" class="view">
+                        <div class="map-filters">
+                            <select id="map-filter-district" onchange="app.onDistrictChange()">
+                                <option value="">İlçe Seçiniz</option>
+                                <option value="Seyhan">Seyhan</option>
+                                <option value="Çukurova">Çukurova</option>
+                                <option value="Yüreğir">Yüreğir</option>
+                                <option value="Sarıçam">Sarıçam</option>
+                            </select>
+                            <select id="map-filter-neighborhood" onchange="app.onNeighborhoodChange()">
+                                <option value="">Mahalle Seçiniz</option>
+                                <!-- Populated by JS -->
+                            </select>
+                            <div class="filter-divider"></div>
+                            <select id="map-filter-type">
+                                <option value="all">Tüm Tipler</option>
+                                <option value="sale">Satılık</option>
+                                <option value="rent">Kiralık</option>
+                            </select>
+                            <select id="map-filter-rooms">
+                                <option value="all">Tüm Odalar</option>
+                                <option value="1+1">1+1</option>
+                                <option value="2+1">2+1</option>
+                                <option value="3+1">3+1</option>
+                                <option value="4+1">4+1</option>
+                            </select>
+                            <input type="number" id="map-filter-price-max" placeholder="Max Fiyat (TL)">
+                            <button class="btn btn-primary" onclick="app.renderMapPins()">Filtrele</button>
+                        </div>
+                        <div id="map-container"></div>
+                    </section>
+
+                    <!-- CRM VIEW -->
+                    <section id="crm" class="view">
+                        <div class="view-header">
+                            <h3>Müşteri Listesi</h3>
+                            <button class="btn btn-primary" id="btn-add-customer-header">
+                                <i class="ph ph-plus"></i> Müşteri Ekle
+                            </button>
+                        </div>
+                        <div class="crm-container">
+                            <div class="crm-list" id="crm-list">
+                                <div class="empty-state">
+                                    <i class="ph ph-users"></i>
+                                    <p>Müşteri listeniz boş.</p>
+                                    <button class="btn btn-secondary" onclick="app.modals.open('add-customer')">Müşteri
+                                        Ekle</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- CALENDAR VIEW -->
+                    <section id="calendar" class="view">
+                        <div class="calendar-wrapper">
+                            <div class="calendar-header">
+                                <h3>Yaklaşan Randevular</h3>
+                                <button class="btn btn-primary" onclick="app.modals.open('add-appointment')">
+                                    <i class="ph ph-plus"></i> Randevu Ekle
+                                </button>
+                            </div>
+                            <div class="appointments-list" id="appointments-list">
+                                <div class="empty-state">
+                                    <i class="ph ph-calendar-x"></i>
+                                    <p>Planlanmış randevu yok.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+            </main>
+        </div>
+
+        <!-- MODALS -->
+
+        <!-- Add Listing Modal -->
+        <div class="modal-overlay" id="modal-add-listing">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Yeni İlan Ekle</h3>
+                    <button class="close-modal"
+                        onclick="delete document.getElementById('form-add-listing').dataset.editId; document.querySelector('#modal-add-listing h3').textContent = 'Yeni İlan Ekle'; document.querySelector('#form-add-listing button[type=\'submit\']').textContent = 'Kaydet'; document.getElementById('form-add-listing').reset();"><i
+                            class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-listing" onsubmit="return false;">
+                        <input type="hidden" name="edit_id_field">
+                        <div class="form-group">
+                            <label>Başlık</label>
+                            <input type="text" name="title" required placeholder="Örn: Seyhan'da Satılık 3+1 Daire">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İl</label>
+                                <input type="text" value="Adana" disabled class="form-control-disabled">
+                            </div>
+                            <div class="form-group">
+                                <label>İlçe</label>
+                                <select id="listing-district" onchange="app.onListingDistrictChange()">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Mahalle</label>
+                                <select id="listing-neighborhood" name="location">
+                                    <option value="">Önce İlçe Seçin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Sokak / Cadde / No</label>
+                            <input type="text" name="street" placeholder="Örn: Toros Cad. No:12">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Fiyat (TL)</label>
+                                <input type="text" name="price" required oninput="app.formatPriceInput(this)"
+                                    placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Tip</label>
+                                <select name="type">
+                                    <option value="sale">Satılık</option>
+                                    <option value="rent">Kiralık</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Durum</label>
+                                <select name="status">
+                                    <option value="active">Yayında</option>
+                                    <option value="passive">Pasif</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Oda Sayısı</label>
+                                <select name="rooms">
+                                    <option value="1+0">1+0</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="5+1">5+1</option>
+                                    <option value="6+1">6+1</option>
+                                    <option value="Villa">Villa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mutfak Tipi</label>
+                                <select name="kitchen">
+                                    <option value="Açık Mutfak">Açık Mutfak</option>
+                                    <option value="Kapalı Mutfak">Kapalı Mutfak</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Cephe</label>
+                                <select name="facade">
+                                    <option value="">Seçiniz</option>
+                                    <optgroup label="Tek Cephe">
+                                        <option value="K (Kuzey)">K (Kuzey)</option>
+                                        <option value="G (Güney)">G (Güney)</option>
+                                        <option value="D (Doğu)">D (Doğu)</option>
+                                        <option value="B (Batı)">B (Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="Çift Cephe">
+                                        <option value="KD (Kuzey-Doğu)">KD (Kuzey-Doğu)</option>
+                                        <option value="KB (Kuzey-Batı)">KB (Kuzey-Batı)</option>
+                                        <option value="GD (Güney-Doğu)">GD (Güney-Doğu)</option>
+                                        <option value="GB (Güney-Batı)">GB (Güney-Batı)</option>
+                                        <option value="KG (Kuzey-Güney)">KG (Kuzey-Güney)</option>
+                                        <option value="DB (Doğu-Batı)">DB (Doğu-Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="3 Cephe">
+                                        <option value="KGD (Kuzey-Güney-Doğu)">KGD (Kuzey-Güney-Doğu)</option>
+                                        <option value="KGB (Kuzey-Güney-Batı)">KGB (Kuzey-Güney-Batı)</option>
+                                        <option value="KDB (Kuzey-Doğu-Batı)">KDB (Kuzey-Doğu-Batı)</option>
+                                        <option value="GDB (Güney-Doğu-Batı)">GDB (Güney-Doğu-Batı)</option>
+                                    </optgroup>
+                                    <option value="4 Cephe">4 Cephe (Tam)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>İskan Durumu</label>
+                                <select name="deed_status">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Kat Mülkiyetli">Kat Mülkiyetli</option>
+                                    <option value="Kat İrtifaklı">Kat İrtifaklı</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Site Özellikleri</label>
+                                <select name="site_features">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Sosyal Donatılı">Sosyal Donatılı</option>
+                                    <option value="Kısmi Sosyal Donatı">Kısmi Sosyal Donatı</option>
+                                    <option value="Donatısız">Donatısız</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bulunduğu Kat</label>
+                                <select name="floor_current">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Giriş">Giriş</option>
+                                    <option value="Bahçe Katı">Bahçe Katı</option>
+                                    <option value="Zemin">Zemin</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="14">14</option>
+                                    <option value="15">15</option>
+                                    <option value="16">16</option>
+                                    <option value="17">17</option>
+                                    <option value="18">18</option>
+                                    <option value="19">19</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Toplam Kat</label>
+                                <select name="floor_total">
+                                    <option value="">Seçiniz</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="14">14</option>
+                                    <option value="15">15</option>
+                                    <option value="16">16</option>
+                                    <option value="17">17</option>
+                                    <option value="18">18</option>
+                                    <option value="19">19</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Brüt m²</label>
+                                <input type="number" name="size_gross" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Net m²</label>
+                                <input type="number" name="size_net" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bina Yaşı</label>
+                                <select name="building_age">
+                                    <option value="">Seçiniz</option>
+                                    <option value="0">0 (Yeni)</option>
+                                    <option value="1">1 Yaş</option>
+                                    <option value="2">2 Yaş</option>
+                                    <option value="3">3 Yaş</option>
+                                    <option value="4">4 Yaş</option>
+                                    <option value="5">5 Yaş</option>
+                                    <option value="6-10">6-10 Yaş Arası</option>
+                                    <option value="11-15">11-15 Yaş Arası</option>
+                                    <option value="16-20">16-20 Yaş Arası</option>
+                                    <option value="21-25">21-25 Yaş Arası</option>
+                                    <option value="26-30">26-30 Yaş Arası</option>
+                                    <option value="31+">31 Yaş ve Üzeri</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Hasar Durumu</label>
+                                <select name="damage">
+                                    <option value="Hasarsız">Hasarsız</option>
+                                    <option value="Hasarsızdan Az Hasarlı">Hasarsızdan Az Hasarlı</option>
+                                    <option value="Az Hasarlı">Az Hasarlı</option>
+                                    <option value="Orta Hasarlı">Orta Hasarlı</option>
+                                    <option value="Ağır Hasarlı">Ağır Hasarlı</option>
+                                    <option value="Azdan Az Hasarlı">Azdan Az Hasarlı</option>
+                                    <option value="Azdan Hasarsız">Azdan Hasarsız</option>
+                                    <option value="Ortadan Az Hasarlı">Ortadan Az Hasarlı</option>
+                                    <option value="Ortadan Hasarsız">Ortadan Hasarsız</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>İçinin Durumu</label>
+                                <select name="interior_condition">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Full Yapılı">Full Yapılı</option>
+                                    <option value="Yapılı">Yapılı</option>
+                                    <option value="Az Masraflı">Az Masraflı</option>
+                                    <option value="Çok Masraflı">Çok Masraflı</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Sahibinden/İlan Linki (Opsiyonel)</label>
+                            <input type="url" name="external_link" placeholder="https://sahibinden.com/...">
+                        </div>
+
+                        <div class="form-divider">Mülk Sahibi Bilgileri</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Adı Soyadı</label>
+                                <input type="text" name="owner_name" required placeholder="Örn: Ahmet Yılmaz">
+                            </div>
+                            <div class="form-group">
+                                <label>Telefon</label>
+                                <input type="tel" name="owner_phone" required placeholder="0555 555 55 55">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Açıklama</label>
+                            <textarea name="details" rows="3"
+                                placeholder="İlan ile ilgili detaylı açıklamalar..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Fotoğraflar</label>
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="listing-photos" multiple accept="image/*">
+                                <div class="file-upload-placeholder">
+                                    <i class="ph ph-images"></i>
+                                    <span>Fotoğraf Seçmek İçin Tıklayın</span>
+                                </div>
+                            </div>
+                            <div id="listing-photos-preview" class="photos-preview"></div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="button" class="btn btn-primary"
+                                onclick="app.manualSubmitAddListing(event)">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matching Listings Modal -->
+        <div class="modal-overlay" id="modal-matches">
+            <div class="modal modal-large">
+                <div class="modal-header">
+                    <h3>Uyumlu İlanlar</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div id="matches-criteria" class="matches-criteria">
+                        <!-- Criteria summary will be here -->
+                    </div>
+                    <div id="matches-list" class="listings-grid" style="grid-template-columns: 1fr; gap: 1rem;">
+                        <!-- Matches will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add FSBO Modal -->
+        <div class="modal-overlay" id="modal-add-fsbo">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Yeni FSBO Fırsatı</h3>
+                    <button class="close-modal"
+                        onclick="delete document.getElementById('form-add-fsbo').dataset.editId; document.querySelector('#modal-add-fsbo h3').textContent = 'Yeni FSBO Fırsatı'; document.querySelector('#form-add-fsbo button[type=\'submit\']').textContent = 'Kaydet'; document.getElementById('form-add-fsbo').reset();"><i
+                            class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-fsbo">
+                        <!-- Smart Paste Section -->
+                        <div class="smart-paste-container"
+                            style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #3b82f6;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label style="color: #1e40af; font-weight: 600; margin:0;"><i
+                                        class="ph ph-magic-wand"></i>
+                                    Akıllı Hızlı Giriş</label>
+                                <div>
+                                    <button type="button" class="btn btn-text btn-sm" onclick="app.toggleOcrMode()"
+                                        style="color: #4f46e5; font-size: 12px;">
+                                        <i class="ph ph-camera"></i> Resimden Oku (OCR)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Text Mode -->
+                            <div id="smart-paste-text-mode">
+                                <textarea id="fsbo-smart-text" placeholder="İlan metnini buraya yapıştırın..." rows="3"
+                                    style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-size: 13px;"></textarea>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="app.parseFsboText()"
+                                    style="width: 100%; margin-top: 8px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">
+                                    <i class="ph ph-lightning"></i> Bilgileri Otomatik Doldur
+                                </button>
+                            </div>
+
+                            <!-- OCR Mode (Hidden by default) -->
+                            <div id="smart-paste-ocr-mode" style="display: none;">
+                                <div tabindex="0" onpaste="app.handleOcrPaste(event)"
+                                    style="border: 2px dashed #6366f1; background: #eef2ff; padding: 20px; text-align: center; border-radius: 6px; cursor: pointer;">
+                                    <i class="ph ph-scan" style="font-size: 32px; color: #6366f1;"></i>
+                                    <p style="margin: 10px 0; color: #4338ca; font-size: 14px;"><strong>Ekran
+                                            Görüntüsünü</strong> buraya yapıştırın (CTRL+V)</p>
+                                    <small id="ocr-status" style="color: #6366f1;">Resim üzerindeki yazılar okunup forma
+                                        aktarılacak.</small>
+                                </div>
+                                <button type="button" class="btn btn-text btn-sm" onclick="app.toggleOcrMode()"
+                                    style="width: 100%; margin-top: 5px;">
+                                    İptal / Metin Moduna Dön
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Başlık / Mülk Sahibi</label>
+                            <input type="text" name="owner" required placeholder="Örn: Ahmet Bey (Sahibinden)">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Telefon</label>
+                                <input type="tel" name="phone" placeholder="0555...">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>İlçe</label>
+                                    <select name="district" id="fsbo-district" onchange="app.onFsboDistrictChange()">
+                                        <option value="">Seçiniz</option>
+                                        <option value="Seyhan">Seyhan</option>
+                                        <option value="Çukurova">Çukurova</option>
+                                        <option value="Yüreğir">Yüreğir</option>
+                                        <option value="Sarıçam">Sarıçam</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Mahalle</label>
+                                    <select name="neighborhood" id="fsbo-neighborhood">
+                                        <option value="">Önce İlçe Seçin</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Fiyat (TL)</label>
+                                <input type="text" name="price" onkeyup="app.formatPriceInput(this)">
+                            </div>
+                            <!-- Valid Smart Image Paste Area -->
+                            <div class="form-group">
+                                <label>Fotoğraflar</label>
+                                <div id="fsbo-image-paste-area" tabindex="0"
+                                    style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 16px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s;"
+                                    onpaste="app.handleFsboImagePaste(event)"
+                                    onclick="document.getElementById('fsbo-photo-input').click()">
+                                    <i class="ph ph-images" style="font-size: 24px; color: #94a3b8;"></i>
+                                    <p style="margin: 4px 0 0; font-size: 13px; color: #475569;">Resmi kopyala &
+                                        <strong>CTRL+V</strong> yap
+                                    </p>
+                                    <small style="color: #94a3b8; font-size: 11px;">veya tıklayıp dosya seç</small>
+                                </div>
+                                <input type="file" name="photo" accept="image/*" id="fsbo-photo-input" multiple
+                                    style="display: none;" onchange="app.handleFsboFileSelect(this)">
+
+                                <!-- Preview Grid -->
+                                <div id="fsbo-image-preview"
+                                    style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Property Details Section -->
+                        <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 12px;">
+                            <label style="font-size: 12px; color: #64748b; margin-bottom: 8px; display: block;"><i
+                                    class="ph ph-buildings"></i> Daire Bilgileri</label>
+                            <div class="form-row" style="gap: 8px;">
+                                <div class="form-group" style="flex: 1;">
+                                    <label style="font-size: 11px;">Oda Sayısı</label>
+                                    <select name="rooms" style="font-size: 12px; padding: 6px;">
+                                        <option value="">-</option>
+                                        <option value="1+0">1+0</option>
+                                        <option value="1+1">1+1</option>
+                                        <option value="2+1">2+1</option>
+                                        <option value="3+1">3+1</option>
+                                        <option value="4+1">4+1</option>
+                                        <option value="5+1">5+1</option>
+                                        <option value="6+">6+</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label style="font-size: 11px;">Bulunduğu Kat</label>
+                                    <input type="number" name="floor_current" placeholder="3" min="0" max="50"
+                                        style="font-size: 12px; padding: 6px;">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label style="font-size: 11px;">Toplam Kat</label>
+                                    <input type="number" name="floor_total" placeholder="10" min="1" max="50"
+                                        style="font-size: 12px; padding: 6px;">
+                                </div>
+                                <div class="form-group" style="flex: 1;">
+                                    <label style="font-size: 11px;">Bina Yaşı</label>
+                                    <select name="building_age" style="font-size: 12px; padding: 6px;">
+                                        <option value="">-</option>
+                                        <option value="0">0 (Sıfır)</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6-10">6-10</option>
+                                        <option value="11-15">11-15</option>
+                                        <option value="16-20">16-20</option>
+                                        <option value="21-25">21-25</option>
+                                        <option value="26-30">26-30</option>
+                                        <option value="30+">30+</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top: 8px;">
+                                <label style="font-size: 11px;">Apartman / Site Adı (Opsiyonel)</label>
+                                <input type="text" name="building_name" placeholder="Örn: Güneş Apartmanı"
+                                    style="font-size: 12px; padding: 6px;">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İlan Tarihi</label>
+                                <input type="date" name="start_date">
+                            </div>
+                            <div class="form-group">
+                                <label>Bitiş / Planlanan Arama</label>
+                                <input type="date" name="end_date">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>İlan Linki</label>
+                            <input type="url" name="link" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label>Durum</label>
+                            <select name="status">
+                                <option value="Arama Yapılacak">Arama Yapılacak</option>
+                                <option value="Arandı - Ulaşılamadı">Arandı - Ulaşılamadı</option>
+                                <option value="Arandı - Olumsuz">Arandı - Olumsuz</option>
+                                <option value="Randevu Alındı">Randevu Alındı</option>
+                                <option value="Portföye Alındı">Portföye Alındı</option>
+                                <option value="İlanı Yenilemiş">İlanı Yenilemiş</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notlar</label>
+                            <textarea name="notes" rows="2"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Listing Modal -->
+
+        <!-- Edit Listing Modal -->
+        <div class="modal-overlay" id="modal-edit-listing">
+            <div class="modal modal-large">
+                <div class="modal-header">
+                    <h3>İlan Düzenle</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-edit-listing">
+                        <input type="hidden" name="id">
+                        <div class="form-group">
+                            <label>Başlık</label>
+                            <input type="text" name="title" required placeholder="Örn: Seyhan'da Satılık 3+1 Daire">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İl</label>
+                                <input type="text" value="Adana" disabled class="form-control-disabled">
+                            </div>
+                            <div class="form-group">
+                                <label>İlçe</label>
+                                <select id="edit-listing-district" onchange="app.onEditListingDistrictChange()">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Mahalle</label>
+                                <select id="edit-listing-neighborhood" name="location">
+                                    <option value="">Önce İlçe Seçin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Sokak / Cadde / No</label>
+                            <input type="text" name="street" placeholder="Örn: Toros Cad. No:12">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Fiyat (TL)</label>
+                                <input type="text" name="price" required oninput="app.formatPriceInput(this)"
+                                    placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Tip</label>
+                                <select name="type">
+                                    <option value="sale">Satılık</option>
+                                    <option value="rent">Kiralık</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Durum</label>
+                                <select name="status">
+                                    <option value="active">Yayında</option>
+                                    <option value="passive">Pasif</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Oda Sayısı</label>
+                                <select name="rooms">
+                                    <option value="1+0">1+0</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="5+1">5+1</option>
+                                    <option value="6+1">6+1</option>
+                                    <option value="Villa">Villa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mutfak Tipi</label>
+                                <select name="kitchen">
+                                    <option value="Açık Mutfak">Açık Mutfak</option>
+                                    <option value="Kapalı Mutfak">Kapalı Mutfak</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Cephe</label>
+                                <select name="facade">
+                                    <option value="">Seçiniz</option>
+                                    <optgroup label="Tek Cephe">
+                                        <option value="K (Kuzey)">K (Kuzey)</option>
+                                        <option value="G (Güney)">G (Güney)</option>
+                                        <option value="D (Doğu)">D (Doğu)</option>
+                                        <option value="B (Batı)">B (Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="Çift Cephe">
+                                        <option value="KD (Kuzey-Doğu)">KD (Kuzey-Doğu)</option>
+                                        <option value="KB (Kuzey-Batı)">KB (Kuzey-Batı)</option>
+                                        <option value="GD (Güney-Doğu)">GD (Güney-Doğu)</option>
+                                        <option value="GB (Güney-Batı)">GB (Güney-Batı)</option>
+                                        <option value="KG (Kuzey-Güney)">KG (Kuzey-Güney)</option>
+                                        <option value="DB (Doğu-Batı)">DB (Doğu-Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="3 Cephe">
+                                        <option value="KGD (Kuzey-Güney-Doğu)">KGD (Kuzey-Güney-Doğu)</option>
+                                        <option value="KGB (Kuzey-Güney-Batı)">KGB (Kuzey-Güney-Batı)</option>
+                                        <option value="KDB (Kuzey-Doğu-Batı)">KDB (Kuzey-Doğu-Batı)</option>
+                                        <option value="GDB (Güney-Doğu-Batı)">GDB (Güney-Doğu-Batı)</option>
+                                    </optgroup>
+                                    <option value="4 Cephe">4 Cephe (Tam)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>İskan Durumu</label>
+                                <select name="deed_status">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Kat Mülkiyetli">Kat Mülkiyetli</option>
+                                    <option value="Kat İrtifaklı">Kat İrtifaklı</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bulunduğu Kat</label>
+                                <select name="floor_current">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Giriş">Giriş</option>
+                                    <option value="Bahçe Katı">Bahçe Katı</option>
+                                    <option value="Zemin">Zemin</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="14">14</option>
+                                    <option value="15">15</option>
+                                    <option value="16">16</option>
+                                    <option value="17">17</option>
+                                    <option value="18">18</option>
+                                    <option value="19">19</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Toplam Kat</label>
+                                <select name="floor_total">
+                                    <option value="">Seçiniz</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                    <option value="11">11</option>
+                                    <option value="12">12</option>
+                                    <option value="13">13</option>
+                                    <option value="14">14</option>
+                                    <option value="15">15</option>
+                                    <option value="16">16</option>
+                                    <option value="17">17</option>
+                                    <option value="18">18</option>
+                                    <option value="19">19</option>
+                                    <option value="20">20</option>
+                                    <option value="21">21</option>
+                                    <option value="22">22</option>
+                                    <option value="23">23</option>
+                                    <option value="24">24</option>
+                                    <option value="25">25</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Brüt m²</label>
+                                <input type="number" name="size_gross" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Net m²</label>
+                                <input type="number" name="size_net" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bina Yaşı</label>
+                                <select name="building_age">
+                                    <option value="">Seçiniz</option>
+                                    <option value="0">0 (Yeni)</option>
+                                    <option value="1">1 Yaş</option>
+                                    <option value="2">2 Yaş</option>
+                                    <option value="3">3 Yaş</option>
+                                    <option value="4">4 Yaş</option>
+                                    <option value="5">5 Yaş</option>
+                                    <option value="6-10">6-10 Yaş Arası</option>
+                                    <option value="11-15">11-15 Yaş Arası</option>
+                                    <option value="16-20">16-20 Yaş Arası</option>
+                                    <option value="21-25">21-25 Yaş Arası</option>
+                                    <option value="26-30">26-30 Yaş Arası</option>
+                                    <option value="31+">31 Yaş ve Üzeri</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Hasar Durumu</label>
+                                <select name="damage">
+                                    <option value="Hasarsız">Hasarsız</option>
+                                    <option value="Hasarsızdan Az Hasarlı">Hasarsızdan Az Hasarlı</option>
+                                    <option value="Az Hasarlı">Az Hasarlı</option>
+                                    <option value="Orta Hasarlı">Orta Hasarlı</option>
+                                    <option value="Ağır Hasarlı">Ağır Hasarlı</option>
+                                    <option value="Azdan Az Hasarlı">Azdan Az Hasarlı</option>
+                                    <option value="Azdan Hasarsız">Azdan Hasarsız</option>
+                                    <option value="Ortadan Az Hasarlı">Ortadan Az Hasarlı</option>
+                                    <option value="Ortadan Hasarsız">Ortadan Hasarsız</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İçinin Durumu</label>
+                                <select name="interior_condition">
+                                    <option value="Normal">Normal</option>
+                                    <option value="Full Yapılı">Full Yapılı</option>
+                                    <option value="Yapılı">Yapılı</option>
+                                    <option value="Az Masraflı">Az Masraflı</option>
+                                    <option value="Çok Masraflı">Çok Masraflı</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-divider">Mülk Sahibi Bilgileri</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Adı Soyadı</label>
+                                <input type="text" name="owner_name" required placeholder="Örn: Ahmet Yılmaz">
+                            </div>
+                            <div class="form-group">
+                                <label>Telefon</label>
+                                <input type="tel" name="owner_phone" required placeholder="0555 555 55 55">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Sahibinden Linki (Opsiyonel)</label>
+                            <input type="url" name="external_link" placeholder="https://www.sahibinden.com/ilan/...">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Açıklama</label>
+                            <textarea name="description" rows="3"
+                                placeholder="İlan ile ilgili detaylı açıklamalar..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="button" class="btn btn-primary"
+                                onclick="app.saveEditListing()">Güncelle</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="modal-overlay" id="modal-edit-customer">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Müşteri Düzenle</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-edit-customer">
+                        <input type="hidden" name="id">
+                        <div class="form-group">
+                            <label>Ad Soyad</label>
+                            <input type="text" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telefon</label>
+                            <input type="tel" name="phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Bütçe (Max TL)</label>
+                            <input type="text" name="budget" placeholder="Örn: 5.000.000" maxlength="15">
+                        </div>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex:1">
+                                <label>İlçe</label>
+                                <select id="edit-customer-district" onchange="app.onEditCustomerDistrictChange()">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Mahalle</label>
+                                <select id="edit-customer-neighborhood">
+                                    <option value="">Önce İlçe Seçin</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:0">
+                                <button type="button" class="btn btn-secondary" onclick="app.addRegionToEdit()"
+                                    style="height: 42px;">
+                                    <i class="ph ph-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="edit-selected-regions" class="selected-regions"></div>
+                        <!-- Hidden input to store combined regions -->
+                        <input type="hidden" name="region" id="edit-customer-region-input">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tercih Edilen Oda</label>
+                                <select name="room_pref">
+                                    <option value="">Farketmez</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="Villa">Villa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mutfak Tipi</label>
+                                <select name="kitchen_pref">
+                                    <option value="">Farketmez</option>
+                                    <option value="Açık Mutfak">Açık Mutfak</option>
+                                    <option value="Kapalı Mutfak">Kapalı Mutfak</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Müşteri Tipi</label>
+                            <select name="type">
+                                <option value="buyer">Alıcı</option>
+                                <option value="seller">Satıcı</option>
+                                <option value="renter">Kiracı</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notlar</label>
+                            <textarea name="notes" rows="3"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Update Modal -->
+        <!-- Status Update Modal moved to bottom -->
+
+        <!-- Gallery Modal -->
+        <div class="modal-overlay" id="modal-gallery">
+            <div class="modal" style="max-width: 900px;">
+                <div class="modal-header">
+                    <h3 id="gallery-title">İlan Görselleri</h3>
+                    <button class="icon-btn close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body" style="padding: 0;">
+                    <div class="gallery-container">
+                        <div class="main-image-container">
+                            <img src="" id="gallery-image" alt="İlan Resmi">
+                            <div class="gallery-nav prev" onclick="app.prevImage()"><i class="ph ph-caret-left"></i>
+                            </div>
+                            <div class="gallery-nav next" onclick="app.nextImage()"><i class="ph ph-caret-right"></i>
+                            </div>
+                        </div>
+                        <div class="thumbnails" id="gallery-thumbnails">
+                            <!-- Mock Thumbnails -->
+                        </div>
+                    </div>
+                    <!-- Details Section -->
+                    <div class="gallery-details-section"
+                        style="padding: 20px; background: #f9fafb; border-top: 1px solid #e5e7eb;">
+                        <h4 style="margin-bottom: 12px; font-size: 16px; font-weight: 600;">İlan Detayları</h4>
+                        <div id="gallery-listing-details"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; font-size: 14px;">
+                            <!-- Details injected via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- FSBO Status Modal -->
+        <div class="modal-overlay" id="modal-fsbo-status">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Arama Sonucu / Durum</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="fsbo-status-id">
+                    <div class="status-actions-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('Arandı - Ulaşılamadı')"
+                            style="color:#d97706; border-color:#d97706;">
+                            <i class="ph ph-phone-slash"></i> Ulaşılamadı
+                        </button>
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('Arandı - Olumsuz')"
+                            style="color:#991b1b; border-color:#991b1b;">
+                            <i class="ph ph-thumbs-down"></i> Olumsuz
+                        </button>
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('Randevu Alındı')"
+                            style="color:#16a34a; border-color:#16a34a;">
+                            <i class="ph ph-calendar-check"></i> Randevu Alındı
+                        </button>
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('Portföyümüze Eklendi')"
+                            style="color:#2563eb; border-color:#2563eb;">
+                            <i class="ph ph-house-line"></i> Portföye Ekle
+                        </button>
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('Arama Yapılacak')"
+                            style="color:#64748b; border-color:#64748b;">
+                            <i class="ph ph-clock"></i> Arama Yapılacak
+                        </button>
+                        <button class="btn btn-outline" onclick="app.setFsboStatus('İlan Yayından Kalkmış')"
+                            style="color:#475569; border-color:#475569;">
+                            <i class="ph ph-prohibit"></i> İlan Kalkmış
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Appointment Modal -->
+        <div class="modal-overlay" id="modal-add-appointment">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Yeni Randevu Ekle</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-appointment">
+                        <div class="form-group">
+                            <label>Başlık / Müşteri</label>
+                            <input type="text" name="title" required placeholder="Örn: Ahmet Bey ile görüşme">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tarih</label>
+                                <input type="date" name="date" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Saat</label>
+                                <input type="time" name="time" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Notlar</label>
+                            <textarea name="notes" rows="2"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simple Lightbox Modal -->
+        <div class="modal-overlay" id="modal-lightbox" style="z-index: 1100; background: rgba(0,0,0,0.9);">
+            <div class="modal-lightbox-content" style="position:relative; max-width:90%; max-height:90%;">
+                <button class="close-modal"
+                    style="position:absolute; top:-40px; right:0; color:white; background:none; border:none; font-size:32px; cursor:pointer;"
+                    onclick="app.modals.closeAll()">&times;</button>
+                <img id="lightbox-image" src=""
+                    style="max-width:100%; max-height:85vh; border-radius:4px; box-shadow:0 0 20px rgba(0,0,0,0.5);">
+            </div>
+        </div>
+
+        <!-- Photo Gallery Modal -->
+        <!-- AI Evaluation Modal -->
+        <div class="modal-overlay" id="modal-evaluation">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>🤖 Gemini Fiyat Analizi</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body" id="evaluation-result">
+                    <!-- Content injected via JS -->
+                </div>
+                <div class="modal-footer"
+                    style="padding: 15px; border-top: 1px solid var(--border); text-align: right;">
+                    <button class="btn btn-primary close-modal">Tamam</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MOVED MODAL TO FIX VISIBILITY -->
+        <div class="modal-overlay" id="modal-add-customer" style="z-index: 99999;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Yeni Müşteri Ekle</h3>
+                    <button class="close-modal" onclick="app.modals.closeAll()"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-customer">
+                        <div class="form-group">
+                            <label>Ad Soyad</label>
+                            <input type="text" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Telefon</label>
+                            <input type="tel" name="phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Bütçe (Max TL)</label>
+                            <input type="text" name="budget" placeholder="Örn: 5.000.000" maxlength="15">
+                        </div>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex:1">
+                                <label>İlçe</label>
+                                <select id="customer-district" onchange="app.onCustomerDistrictChange()">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Mahalle</label>
+                                <select id="customer-neighborhood">
+                                    <option value="">Önce İlçe Seçin</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:0">
+                                <button type="button" class="btn btn-secondary" onclick="app.addRegion()"
+                                    style="height: 42px;">
+                                    <i class="ph ph-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="selected-regions" class="selected-regions"></div>
+                        <input type="hidden" name="region" id="customer-region-input">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tercih Edilen Oda</label>
+                                <select name="room_pref">
+                                    <option value="">Farketmez</option>
+                                    <option value="1+0">1+0</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="5+1">5+1</option>
+                                    <option value="Villa">Villa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mutfak Tipi</label>
+                                <select name="kitchen_pref">
+                                    <option value="">Farketmez</option>
+                                    <option value="Açık Mutfak">Açık Mutfak</option>
+                                    <option value="Kapalı Mutfak">Kapalı Mutfak</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- NEW PREFERENCE FIELDS -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Maks Bina Yaşı</label>
+                                <select name="max_building_age">
+                                    <option value="">Farketmez</option>
+                                    <option value="0">Sıfır (0)</option>
+                                    <option value="1">1 yıl ve altı</option>
+                                    <option value="2">2 yıl ve altı</option>
+                                    <option value="3">3 yıl ve altı</option>
+                                    <option value="5">5 yıl ve altı</option>
+                                    <option value="10">10 yıl ve altı</option>
+                                    <option value="15">15 yıl ve altı</option>
+                                    <option value="20">20 yıl ve altı</option>
+                                    <option value="30">30 yıl ve altı</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Hasar Durumu</label>
+                                <select name="damage_pref">
+                                    <option value="">Farketmez</option>
+                                    <option value="Hasarsız">Hasarsız</option>
+                                    <option value="Az Hasarlı">Az Hasarlı</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Site / Sosyal Donatı</label>
+                            <select name="site_pref">
+                                <option value="">Farketmez</option>
+                                <option value="Site İçi">Site İçi İstiyor</option>
+                                <option value="Sosyal Donatı">Sosyal Donatı İstiyor</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Müşteri Tipi</label>
+                            <select name="type">
+                                <option value="buyer">Alıcı</option>
+                                <option value="seller">Satıcı</option>
+                                <option value="renter">Kiracı</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notlar</label>
+                            <textarea name="notes" rows="3"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal"
+                                onclick="app.modals.closeAll()">İptal</button>
+                            <button type="button" class="btn btn-primary" onclick="app.addNewCustomer()">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- MOVED STATUS UPDATE MODAL -->
+        <div class="modal-overlay" id="modal-status-update" style="z-index: 99999;">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="status-modal-title">Durum Güncelle</h3>
+                    <button class="close-modal" onclick="app.modals.closeAll()"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-status-update">
+                        <input type="hidden" id="status-update-id">
+                        <input type="hidden" id="status-update-type">
+
+                        <div class="form-group">
+                            <label>Gerçekleşen Fiyat (TL)</label>
+                            <input type="text" id="status-final-price" required oninput="app.formatPriceInput(this)"
+                                placeholder="0">
+                            <small style="color: #666; font-size: 12px;">İşlemin gerçekleştiği son fiyatı
+                                giriniz.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>İşlem Tarihi</label>
+                            <input type="date" id="status-date" required class="form-input">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Notlar (Opsiyonel)</label>
+                            <textarea id="status-notes" rows="3" placeholder="İşlem ile ilgili notlar..."></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal"
+                                onclick="app.modals.closeAll()">İptal</button>
+                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- FINDER MODAL -->
+        <div class="modal-overlay" id="modal-finder" style="z-index: 99999;">
+            <div class="modal" style="width: 90%; max-width: 800px;">
+                <div class="modal-header">
+                    <h3>Uygun İlanlar & Bulumlar</h3>
+                    <button class="close-modal" onclick="app.modals.closeAll()"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div id="finder-results" class="listings-grid"
+                        style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+                        <!-- Results injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="app.js?v=force_reload_133"></script>
+    </body>
+
+</html>

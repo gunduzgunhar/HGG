@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Backup files
+backups/
+*.bak
+*.backup
+
+# Restore files
+fsbo_restore.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
