@@ -465,37 +465,51 @@ const app = {
         }
     },
 
-    // --- DATA MANAGEMENT ---
-    loadData() {
+    // --- DATA MANAGEMENT (FIREBASE FIRESTORE) ---
+    firestoreDocId: 'main_data',
+    firestoreLoaded: false,
+
+    async loadData() {
         try {
+            // First load from localStorage (fast, offline)
             const storedListings = localStorage.getItem('rea_listings');
             const storedCustomers = localStorage.getItem('rea_customers');
             const storedAppointments = localStorage.getItem('rea_appointments');
+            const storedFsbo = localStorage.getItem('rea_fsbo');
+            const storedFindings = localStorage.getItem('rea_findings');
 
             if (storedListings) this.data.listings = JSON.parse(storedListings);
-
-            if (storedCustomers) {
-                try {
-                    this.data.customers = JSON.parse(storedCustomers);
-                    // Validate it's an array
-                    if (!Array.isArray(this.data.customers)) this.data.customers = [];
-                } catch (e) {
-                    console.error("Customer Data Corrupt", e);
-                    localStorage.setItem('rea_customers_backup', storedCustomers);
-                    this.data.customers = [];
-                    alert('Müşteri verilerinizde bir hata tespit edildi. Bozuk veriler yedeklendi ve liste sıfırlandı.');
-                }
-            }
-
-            const storedFsbo = localStorage.getItem('rea_fsbo');
-            if (storedFsbo) this.data.fsbo = JSON.parse(storedFsbo);
-            if (!this.data.fsbo) this.data.fsbo = [];
-
-            const storedFindings = localStorage.getItem('rea_findings');
-            if (storedFindings) this.data.findings = JSON.parse(storedFindings);
-            if (!this.data.findings) this.data.findings = [];
-
+            if (storedCustomers) this.data.customers = JSON.parse(storedCustomers);
             if (storedAppointments) this.data.appointments = JSON.parse(storedAppointments);
+            if (storedFsbo) this.data.fsbo = JSON.parse(storedFsbo);
+            if (storedFindings) this.data.findings = JSON.parse(storedFindings);
+
+            // Then load from Firestore (cloud sync)
+            if (window.db) {
+                const doc = await window.db.collection('emlak_data').doc(this.firestoreDocId).get();
+                if (doc.exists) {
+                    const cloudData = doc.data();
+                    console.log("Firestore data loaded:", cloudData);
+
+                    // Merge cloud data (cloud takes priority)
+                    if (cloudData.listings) this.data.listings = cloudData.listings;
+                    if (cloudData.customers) this.data.customers = cloudData.customers;
+                    if (cloudData.appointments) this.data.appointments = cloudData.appointments;
+                    if (cloudData.fsbo) this.data.fsbo = cloudData.fsbo;
+                    if (cloudData.findings) this.data.findings = cloudData.findings;
+
+                    // Update localStorage with cloud data
+                    localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
+                    localStorage.setItem('rea_customers', JSON.stringify(this.data.customers || []));
+                    localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments || []));
+                    localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
+                    localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
+                }
+                this.firestoreLoaded = true;
+
+                // Setup real-time listener for live sync
+                this.setupFirestoreListener();
+            }
         } catch (error) {
             console.error('Data loading error:', error);
         }
@@ -503,8 +517,37 @@ const app = {
         this.updateStats();
     },
 
+    setupFirestoreListener() {
+        if (!window.db) return;
+
+        window.db.collection('emlak_data').doc(this.firestoreDocId).onSnapshot((doc) => {
+            if (doc.exists && this.firestoreLoaded) {
+                const cloudData = doc.data();
+                console.log("Real-time update received");
+
+                // Only update if data actually changed (compare timestamps)
+                const cloudTimestamp = cloudData.lastUpdated || 0;
+                const localTimestamp = this.lastSaveTimestamp || 0;
+
+                if (cloudTimestamp > localTimestamp) {
+                    this.data.listings = cloudData.listings || [];
+                    this.data.customers = cloudData.customers || [];
+                    this.data.appointments = cloudData.appointments || [];
+                    this.data.fsbo = cloudData.fsbo || [];
+                    this.data.findings = cloudData.findings || [];
+
+                    // Refresh UI
+                    this.renderAll();
+                    this.updateStats();
+                }
+            }
+        });
+    },
+
+    lastSaveTimestamp: 0,
 
     saveData(key) {
+        // Save to localStorage first (fast)
         if (key === 'listings') {
             localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
         } else if (key === 'customers') {
@@ -516,7 +559,37 @@ const app = {
         } else if (key === 'findings') {
             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
         }
+
+        // Save to Firestore (cloud sync)
+        this.saveToFirestore();
+
         this.updateStats();
+    },
+
+    // Debounced Firestore save to avoid too many writes
+    firestoreSaveTimeout: null,
+
+    saveToFirestore() {
+        if (!window.db) return;
+
+        // Debounce: wait 1 second before saving to avoid rapid writes
+        clearTimeout(this.firestoreSaveTimeout);
+        this.firestoreSaveTimeout = setTimeout(async () => {
+            try {
+                this.lastSaveTimestamp = Date.now();
+                await window.db.collection('emlak_data').doc(this.firestoreDocId).set({
+                    listings: this.data.listings || [],
+                    customers: this.data.customers || [],
+                    appointments: this.data.appointments || [],
+                    fsbo: this.data.fsbo || [],
+                    findings: this.data.findings || [],
+                    lastUpdated: this.lastSaveTimestamp
+                });
+                console.log("Firestore saved successfully");
+            } catch (error) {
+                console.error("Firestore save error:", error);
+            }
+        }, 1000);
     },
 
     debugDistricts() {

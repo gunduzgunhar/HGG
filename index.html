@@ -37,6 +37,26 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- OCR Library -->
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDcUDE7EwQ6VBte-oTretZVQmOwCsmJ7JE",
+            authDomain: "gunhar-bfb6f.firebaseapp.com",
+            projectId: "gunhar-bfb6f",
+            storageBucket: "gunhar-bfb6f.firebasestorage.app",
+            messagingSenderId: "273833813391",
+            appId: "1:273833813391:web:fb1aa3c5bac314fb7e57fa"
+        };
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        window.db = firebase.firestore();
+        console.log("Firebase initialized!");
+    </script>
+
     <link rel="stylesheet" href="style.css?v=force_reload_004">
 </head>
 
