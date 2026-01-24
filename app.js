@@ -3359,7 +3359,14 @@ app.renderFsboList = function () {
                 
                 <div style="margin:10px 0; border-top:1px dashed #e2e8f0; padding-top:10px;">
                      <div style="margin-bottom:8px; font-size:13px; color:#334155;">
-                        <i class="ph ph-phone" style="vertical-align:middle; color:#64748b"></i> ${item.phone || '-'}
+                        ${item.phone ?
+                `<a href="tel:${item.phone.replace(/\s/g, '')}" style="text-decoration:none; color:inherit; display:inline-flex; align-items:center; gap:6px;">
+                            <i class="ph ph-phone" style="vertical-align:middle; color:#64748b"></i> 
+                            <span style="font-weight:600; font-size:14px;">${item.phone}</span>
+                            <span style="background:#dcfce7; color:#166534; padding:2px 6px; border-radius:4px; font-size:10px; display:flex; align-items:center; gap:4px;"><i class="ph ph-phone-call"></i> ARA</span>
+                         </a>`
+                :
+                `<span><i class="ph ph-phone" style="vertical-align:middle; color:#64748b"></i> -</span>`}
                     </div>
 
                     ${item.link ? `
@@ -3381,7 +3388,7 @@ app.renderFsboList = function () {
                      <button class="btn btn-sm btn-outline" onclick="app.populateEditFsbo('${item.id}')" title="Düzenle"><i class="ph ph-pencil-simple" style="color:var(--primary);"></i></button>
                      <button class="btn btn-sm btn-outline" onclick="app.renewFsboListing('${item.id}')" title="İlanı Yenile" style="color:#16a34a; border-color:#16a34a;"><i class="ph ph-arrows-clockwise"></i></button>
                      <button class="btn btn-sm btn-outline" onclick="app.openFsboStatusModal('${item.id}')" style="color:var(--dark); border-color:#cbd5e1;">Durum</button>
-                     <button class="btn btn-sm btn-primary" style="flex:1" onclick="window.open('tel:${item.phone}', '_self')">Ara</button>
+                     <a href="tel:${(item.phone || '').replace(/\s/g, '')}" class="btn btn-sm btn-primary" style="flex:1; text-align:center; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:5px;"><i class="ph ph-phone"></i> Ara</a>
                 </div>
             </div>`;
         return card;
