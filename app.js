@@ -1215,12 +1215,20 @@ const app = {
 
     deleteCustomer(id) {
         if (!confirm("Bu müşteriyi silmek istediğinize emin misiniz?")) return;
-        const index = this.data.customers.findIndex(c => c.id === id);
-        if (index === -1) return;
+
+        // Loose equality (==) to handle both string and number IDs
+        const index = this.data.customers.findIndex(c => c.id == id);
+
+        if (index === -1) {
+            console.error("Müşteri bulunamadı:", id, this.data.customers);
+            alert("Hata: Müşteri bulunamadı. Sayfayı yenileyip tekrar deneyin.");
+            return;
+        }
 
         this.data.customers.splice(index, 1);
         this.saveData('customers');
         this.renderCustomers();
+        this.updateStats(); // Update dashboard stats too
     },
 
     onDistrictChange() {
