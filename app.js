@@ -492,11 +492,28 @@ const app = {
                     const cloudData = doc.data();
                     console.log("Firestore data loaded:", cloudData);
 
-                    // Merge cloud data (cloud takes priority)
+                    // FSBO Migration: Merge local FSBO with cloud FSBO (preserve old data)
+                    const localFsbo = this.data.fsbo || [];
+                    const cloudFsbo = cloudData.fsbo || [];
+                    const localFsboIds = new Set(localFsbo.map(f => f.id));
+                    const cloudFsboIds = new Set(cloudFsbo.map(f => f.id));
+
+                    // Find local items not in cloud (need to be uploaded)
+                    const localOnlyFsbo = localFsbo.filter(f => !cloudFsboIds.has(f.id));
+                    if (localOnlyFsbo.length > 0) {
+                        console.log(`FSBO Migrasyon: ${localOnlyFsbo.length} eski kayıt Firebase'e aktarılacak`);
+                        // Merge: cloud data + local-only data
+                        this.data.fsbo = [...cloudFsbo, ...localOnlyFsbo];
+                        // Trigger save to upload local data to cloud
+                        setTimeout(() => this.saveToFirestore(), 2000);
+                    } else {
+                        this.data.fsbo = cloudFsbo;
+                    }
+
+                    // Merge cloud data (cloud takes priority for other data)
                     if (cloudData.listings) this.data.listings = cloudData.listings;
                     if (cloudData.customers) this.data.customers = cloudData.customers;
                     if (cloudData.appointments) this.data.appointments = cloudData.appointments;
-                    if (cloudData.fsbo) this.data.fsbo = cloudData.fsbo;
                     if (cloudData.findings) this.data.findings = cloudData.findings;
 
                     // Update localStorage with cloud data
@@ -2661,11 +2678,13 @@ const app = {
             const elSold = document.getElementById('stat-sold');
             const elCustomers = document.getElementById('stat-customers');
             const elOwners = document.getElementById('stat-owners');
+            const elFindings = document.getElementById('stat-findings');
 
             if (elActive) elActive.textContent = activeListings;
             if (elSold) elSold.textContent = passiveListings;
             if (elCustomers) elCustomers.textContent = customers;
             if (elOwners) elOwners.textContent = owners;
+            if (elFindings) elFindings.textContent = (this.data.findings || []).length;
 
             // Render neighborhood stats
             this.renderNeighborhoodStats();
@@ -3661,6 +3680,35 @@ app.parseFsboText = function () {
     }
 };
 
+// DEBUG: Show localStorage FSBO data for migration troubleshooting
+app.debugFsboData = function () {
+    const raw = localStorage.getItem('rea_fsbo');
+    const current = app.data.fsbo;
+
+    let message = "=== FSBO DEBUG ===\n\n";
+    message += "localStorage (rea_fsbo):\n";
+    if (raw) {
+        const parsed = JSON.parse(raw);
+        message += `Kayıt sayısı: ${parsed.length}\n`;
+        parsed.forEach((f, i) => {
+            message += `${i + 1}. ${f.owner || 'N/A'} - ${f.phone || 'N/A'}\n`;
+        });
+    } else {
+        message += "BOŞ veya YOK\n";
+    }
+
+    message += "\n\nMevcut app.data.fsbo:\n";
+    message += `Kayıt sayısı: ${current ? current.length : 0}\n`;
+    if (current) {
+        current.forEach((f, i) => {
+            message += `${i + 1}. ${f.owner || 'N/A'} - ${f.phone || 'N/A'}\n`;
+        });
+    }
+
+    alert(message);
+    console.log("FSBO DEBUG:", { localStorage: raw ? JSON.parse(raw) : null, appData: current });
+};
+
 app.toggleOcrMode = function () {
     const textMode = document.getElementById('smart-paste-text-mode');
     const ocrMode = document.getElementById('smart-paste-ocr-mode');
@@ -3785,21 +3833,56 @@ app.importData = function (file) {
                 return;
             }
 
-            if (confirm(`Bu dosyayı yüklemek istiyor musunuz?\n\nİçerik:\n- ${(imported.data.listings || []).length} ilan\n- ${(imported.data.customers || []).length} müşteri\n- ${(imported.data.findings || []).length} bulum\n- ${(imported.data.appointments || []).length} randevu\n\nMevcut verilerinizin ÜZERİNE yazılacak!`)) {
+            // Count items in backup
+            const backupListings = imported.data.listings || [];
+            const backupCustomers = imported.data.customers || [];
+            const backupFsbo = imported.data.fsbo || [];
+            const backupFindings = imported.data.findings || [];
+            const backupAppointments = imported.data.appointments || [];
 
-                this.data = imported.data;
+            // Count current items
+            const currentListings = this.data.listings || [];
+            const currentCustomers = this.data.customers || [];
+            const currentFsbo = this.data.fsbo || [];
+            const currentFindings = this.data.findings || [];
+            const currentAppointments = this.data.appointments || [];
+
+            if (confirm(`Yedek dosyasını birleştirmek istiyor musunuz?\n\nYedekteki veriler:\n- ${backupListings.length} ilan\n- ${backupCustomers.length} müşteri\n- ${backupFsbo.length} FSBO\n- ${backupFindings.length} bulum\n\nMevcut veriler:\n- ${currentListings.length} ilan\n- ${currentCustomers.length} müşteri\n- ${currentFsbo.length} FSBO\n- ${currentFindings.length} bulum\n\n✅ Yeni eklediğiniz veriler KORUNACAK!`)) {
+
+                // Merge function: add items from backup that don't exist in current
+                const mergeArrays = (current, backup) => {
+                    const currentIds = new Set(current.map(item => item.id));
+                    const newItems = backup.filter(item => !currentIds.has(item.id));
+                    return [...current, ...newItems];
+                };
+
+                // Merge all data types
+                this.data.listings = mergeArrays(currentListings, backupListings);
+                this.data.customers = mergeArrays(currentCustomers, backupCustomers);
+                this.data.fsbo = mergeArrays(currentFsbo, backupFsbo);
+                this.data.findings = mergeArrays(currentFindings, backupFindings);
+                this.data.appointments = mergeArrays(currentAppointments, backupAppointments);
+
+                // Save all
                 this.saveData('listings');
                 this.saveData('customers');
+                this.saveData('fsbo');
                 this.saveData('findings');
                 this.saveData('appointments');
 
                 // Refresh all views
-                this.renderListings();
-                this.renderCustomers();
-                this.renderFindings();
+                this.renderAll();
                 this.updateStats();
 
-                alert('Veriler başarıyla yüklendi!');
+                const addedListings = this.data.listings.length - currentListings.length;
+                const addedCustomers = this.data.customers.length - currentCustomers.length;
+                const addedFsbo = this.data.fsbo.length - currentFsbo.length;
+
+                alert(`Veriler başarıyla birleştirildi!\n\n` +
+                    `Eklenen:\n` +
+                    `+ ${addedListings} yeni ilan\n` +
+                    `+ ${addedCustomers} yeni müşteri\n` +
+                    `+ ${addedFsbo} yeni FSBO`);
             }
         } catch (err) {
             alert('Dosya okunamadı: ' + err.message);
