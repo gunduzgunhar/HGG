@@ -2261,6 +2261,7 @@ const app = {
     },
 
     findMatches(customerId) {
+        this.currentFinderCustomerId = customerId; // Store for actions
         const customer = this.data.customers.find(c => c.id == customerId);
         if (!customer) return;
 
@@ -2295,7 +2296,6 @@ const app = {
                 });
                 if (!matchRegion) return false;
             }
-
             return true;
         };
 
@@ -2303,10 +2303,7 @@ const app = {
         const findingMatches = (this.data.findings || []).filter(checkMatch);
 
         const container = document.getElementById('finder-results');
-        if (!container) {
-            console.error("Finder results container not found!");
-            return;
-        }
+        if (!container) return;
 
         const renderMatchCard = (item, source) => {
             const price = parseInt(item.price).toLocaleString('tr-TR');
@@ -2314,6 +2311,10 @@ const app = {
             const location = item.location || '';
             const badge = source === 'finding' ? '<span class="mini-tag blue">BULUM</span>' : '<span class="mini-tag green">İLAN</span>';
             const bg = source === 'finding' ? '#eff6ff' : 'white';
+
+            // CUSTOMER SPECIFIC NOTE LOGIC
+            const interaction = (customer.interactions || {})[item.id];
+            const customerNote = interaction ? interaction.note : null;
 
             return `
                 <div class="listing-card" style="background:${bg}" onclick="app.modals.closeAll(); app.openAddListingModal(${item.id}, '${source}')">
@@ -2348,9 +2349,9 @@ const app = {
                             ${item.size_net ? `<span class="mini-tag gray">${item.size_net} m²</span>` : ''}
                         </div>
                     </div>
-                    ${item.notes ? `
+                    ${customerNote ? `
                     <div style="background:#fffbeb; padding:6px 8px; border-top:1px dashed #fbbf24; font-size:11px; color:#92400e; margin-top:8px; border-radius:0 0 8px 8px;">
-                        <i class="ph ph-note-pencil"></i> ${item.notes.split('\n').slice(-1)[0]}
+                        <i class="ph ph-user-focus"></i> ${customerNote.split('\n').slice(-1)[0]}
                     </div>` : ''}
                 </div>
             `;
@@ -2366,6 +2367,49 @@ const app = {
 
         container.innerHTML = html;
         this.modals.open('finder');
+    },
+
+    toggleListingMenu(e, id) {
+        e.stopPropagation();
+        const menu = document.getElementById(`menu-${id}`);
+        if (menu) {
+            document.querySelectorAll('.context-menu-dropdown').forEach(m => {
+                if (m.id !== `menu-${id}`) m.style.display = 'none';
+            });
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        }
+    },
+
+    handleStatusUpdate(event, itemId, status) {
+        event.stopPropagation();
+        if (!this.currentFinderCustomerId) return;
+
+        const customer = this.data.customers.find(c => c.id == this.currentFinderCustomerId);
+        if (!customer) return;
+
+        if (!customer.interactions) customer.interactions = {};
+
+        const currentNote = (customer.interactions[itemId] || {}).note || '';
+
+        const statusText = {
+            'begenildi': '✅ Beğenildi',
+            'begenilmedi': '👎 Beğenilmedi',
+            'sicak_bakiyor': '🔥 Sıcak Bakıyor',
+            'fiyat_yuksek': '📉 Fiyat Yüksek'
+        };
+
+        const newNoteMsg = `${statusText[status]}`;
+        let newNote = `[${new Date().toLocaleDateString()}] ${newNoteMsg}`;
+        if (currentNote) newNote = currentNote + '\n' + newNote;
+
+        customer.interactions[itemId] = {
+            status: status,
+            note: newNote,
+            date: new Date().toISOString()
+        };
+
+        this.saveData('customers');
+        this.findMatches(this.currentFinderCustomerId);
     },
 
     renderCustomers() {
