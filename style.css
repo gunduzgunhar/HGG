@@ -1339,10 +1339,11 @@ body {
 
     .nav-item {
         flex-direction: column;
-        padding: 8px 12px;
+        padding: 8px 6px;
         font-size: 10px;
         gap: 4px;
-        min-width: 60px;
+        flex: 1;
+        min-width: 0;
         border-radius: 0;
     }
 
@@ -1353,12 +1354,19 @@ body {
     .nav-item span {
         font-size: 9px;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
     }
 
     .nav-item.active {
         background: var(--primary);
         color: white;
         border-radius: 8px;
+    }
+
+    .hide-mobile {
+        display: none !important;
     }
 
     .main-content {
