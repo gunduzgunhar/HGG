@@ -920,6 +920,8 @@ const app = {
         this.renderListings();
         this.renderCustomers();
         this.renderAppointments();
+        this.renderFindings();
+        if (typeof this.renderFsboList === 'function') this.renderFsboList();
         this.updateStats();
         // Map is rendered when tab is activated
     },
