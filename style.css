@@ -296,6 +296,13 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-lg);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
 }
 
 .icon-box {
