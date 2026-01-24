@@ -635,60 +635,79 @@ const app = {
     },
 
     // --- NAVIGATION ---
-    setupNavigation() {
+    setView(targetId) {
+        if (!targetId) return;
+
         const navItems = document.querySelectorAll('.nav-item');
         const views = document.querySelectorAll('.view');
         const pageTitle = document.getElementById('page-title');
 
+        // Update Nav Active State
+        navItems.forEach(n => {
+            n.classList.remove('active');
+            if (n.getAttribute('data-target') === targetId) {
+                n.classList.add('active');
+            }
+        });
+
+        views.forEach(v => v.classList.remove('active'));
+
+        // Handle virtual views (owners reuses crm)
+        let viewId = targetId;
+        if (targetId === 'owners') {
+            viewId = 'crm';
+        }
+
+        const viewEl = document.getElementById(viewId);
+        if (viewEl) {
+            viewEl.classList.add('active');
+        }
+
+        // Update Title
+        const titles = {
+            'dashboard': 'Genel Bakış',
+            'listings': 'Portföy Yönetimi',
+            'crm': 'Müşteri Listesi',
+            'owners': 'Mülk Sahipleri',
+            'calendar': 'Ajanda',
+            'fsbo': 'FSBO Listesi',
+            'map': 'Harita Görünümü',
+            'findings': 'Bulumlar'
+        };
+        if (pageTitle) pageTitle.textContent = titles[targetId] || 'GündüzGünhar';
+
+        // Re-render specific views to ensure freshness
+        if (targetId === 'crm') {
+            this.crmFilter = null; // Clear filter for main list
+            this.renderCustomers();
+        } else if (targetId === 'owners') {
+            this.crmFilter = 'seller';
+            this.renderCustomers();
+        } else if (targetId === 'listings') {
+            this.renderListings();
+        } else if (targetId === 'calendar') {
+            this.renderAppointments();
+        } else if (targetId === 'fsbo') {
+            this.renderFsboList();
+        } else if (targetId === 'map') {
+            this.initMap(); // Initialize map if not already
+            this.renderMapPins(); // Ensure pins are fresh
+            // Trigger map resize
+            setTimeout(() => {
+                if (this.map) this.map.invalidateSize();
+            }, 200);
+        } else if (targetId === 'findings') {
+            this.renderFindings();
+        }
+    },
+
+    setupNavigation() {
+        const navItems = document.querySelectorAll('.nav-item');
         navItems.forEach(item => {
             item.addEventListener('click', () => {
-                // Remove active class from all
-                navItems.forEach(n => n.classList.remove('active'));
-                views.forEach(v => v.classList.remove('active'));
-
-                // Add active to current
-                item.classList.add('active');
                 const targetId = item.getAttribute('data-target');
-
-                // Handle virtual views (owners reuses crm)
-                let viewId = targetId;
-                if (targetId === 'owners') {
-                    viewId = 'crm';
-                }
-
-                const viewEl = document.getElementById(viewId);
-                if (viewEl) {
-                    viewEl.classList.add('active');
-                }
-
-                // Update Title
-                const titles = {
-                    'dashboard': 'Genel Bakış',
-                    'listings': 'Portföy Yönetimi',
-                    'crm': 'Müşteri Listesi',
-                    'owners': 'Mülk Sahipleri',
-                    'calendar': 'Ajanda',
-                    'fsbo': 'FSBO Listesi',
-                    'map': 'Harita Görünümü'
-                };
-                pageTitle.textContent = titles[targetId];
-
-                // Re-render specific views to ensure freshness
-                if (targetId === 'crm') {
-                    app.crmFilter = null; // Clear filter for main list
-                    app.renderCustomers();
-                } else if (targetId === 'owners') {
-                    app.crmFilter = 'seller'; // Show only sellers
-                    app.renderCustomers();
-                } else if (targetId === 'listings') {
-                    app.renderListings();
-                } else if (targetId === 'calendar') {
-                    app.renderAppointments();
-                } else if (targetId === 'fsbo') {
-                    app.renderFsboList();
-                } else if (targetId === 'map') {
-                    app.initMap();
-                    app.renderMapPins(); // Ensure pins are fresh
+                if (targetId) {
+                    this.setView(targetId);
                 }
             });
         });
