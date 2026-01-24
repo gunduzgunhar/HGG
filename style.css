@@ -1331,10 +1331,16 @@ body {
     .main-nav {
         flex-direction: row;
         width: 100%;
-        justify-content: space-around;
-        padding: 8px 0;
-        gap: 0;
+        justify-content: flex-start;
+        padding: 8px 4px;
+        gap: 2px;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .main-nav::-webkit-scrollbar {
+        display: none;
     }
 
     .nav-item {
@@ -1366,7 +1372,7 @@ body {
     }
 
     .hide-mobile {
-        display: none !important;
+        display: flex !important;
     }
 
     .main-content {

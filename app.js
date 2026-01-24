@@ -6,7 +6,8 @@ const app = {
         listings: [],
         customers: [],
         appointments: [],
-        findings: []
+        findings: [],
+        fsbo: []
     },
     currentCustomerRegions: [],
     currentEditRegions: [],
