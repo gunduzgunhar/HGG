@@ -2800,7 +2800,10 @@ const app = {
         container.innerHTML = sorted.map(([name, count]) => {
             const percent = (count / maxCount) * 100;
             return `
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div onclick="app.filterListingsByNeighborhood('${name}')" 
+                     style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px; border-radius: 6px; transition: background 0.2s;"
+                     onmouseover="this.style.background='rgba(0,0,0,0.03)'"
+                     onmouseout="this.style.background='transparent'">
                     <div style="flex: 1; font-size: 14px; color: #374151;">${name}</div>
                     <div style="width: 120px; background: #e5e7eb; border-radius: 4px; height: 8px; position: relative;">
                         <div style="position: absolute; left: 0; top: 0; height: 100%; background: var(--primary); border-radius: 4px; width: ${percent}%;"></div>
@@ -3970,5 +3973,26 @@ app.importData = function (file) {
 
     // Reset file input
     document.getElementById('import-file').value = '';
+};
+
+app.filterListingsByNeighborhood = function (name) {
+    if (this.setView) {
+        this.setView('listings');
+    } else {
+        const btn = document.querySelector('.nav-item[data-target="listings"]');
+        if (btn) btn.click();
+    }
+
+    setTimeout(() => {
+        const searchInput = document.querySelector('#listings .search-input');
+        const districtSelect = document.getElementById('list-filter-district');
+
+        if (districtSelect) districtSelect.value = '';
+
+        if (searchInput) {
+            searchInput.value = name;
+            this.renderListings();
+        }
+    }, 50);
 };
 
