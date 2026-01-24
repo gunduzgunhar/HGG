@@ -913,6 +913,15 @@ const app = {
                 e.target.reset();
             });
         }
+
+        // Add FSBO Form
+        const formAddFsbo = document.getElementById('form-add-fsbo');
+        if (formAddFsbo) {
+            formAddFsbo.addEventListener('submit', (e) => {
+                e.preventDefault();
+                app.addFsbo(new FormData(e.target));
+            });
+        }
     },
 
     // --- RENDERING ---
