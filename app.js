@@ -587,12 +587,12 @@ const app = {
     // Debounced Firestore save to avoid too many writes
     firestoreSaveTimeout: null,
 
-    saveToFirestore() {
+    saveToFirestore(immediate = false) {
         if (!window.db) return;
 
-        // Debounce: wait 1 second before saving to avoid rapid writes
         clearTimeout(this.firestoreSaveTimeout);
-        this.firestoreSaveTimeout = setTimeout(async () => {
+
+        const performSave = async () => {
             try {
                 this.lastSaveTimestamp = Date.now();
                 await window.db.collection('emlak_data').doc(this.firestoreDocId).set({
@@ -607,7 +607,13 @@ const app = {
             } catch (error) {
                 console.error("Firestore save error:", error);
             }
-        }, 1000);
+        };
+
+        if (immediate) {
+            performSave();
+        } else {
+            this.firestoreSaveTimeout = setTimeout(performSave, 1000);
+        }
     },
 
     debugDistricts() {
@@ -2409,6 +2415,7 @@ const app = {
         };
 
         this.saveData('customers');
+        this.saveToFirestore(true); // Force immediate save
         this.findMatches(this.currentFinderCustomerId);
     },
 
