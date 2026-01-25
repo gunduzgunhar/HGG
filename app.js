@@ -1776,6 +1776,7 @@ const app = {
                         </div>
                         <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
                             <button class="btn btn-sm btn-secondary" onclick="triggerOpenGallery(${item.id})" style="padding:6px;"><i class="ph ph-caret-right"></i></button>
+                            ${item.external_link ? `<a href="${item.external_link}" target="_blank" class="btn btn-sm btn-outline" onclick="event.stopPropagation()" style="padding:4px 6px; font-size:10px; color:#3b82f6;" title="İlana Git"><i class="ph ph-arrow-square-out"></i></a>` : ''}
                             <button class="btn btn-sm btn-outline match-status-btn" onclick="event.stopPropagation(); app.toggleMatchStatusMenu(${customer.id}, ${item.id}, 'listing', this)" style="padding:4px 6px; font-size:10px;" title="Durum Belirle">
                                 <i class="ph ph-dots-three-vertical"></i>
                             </button>
@@ -2373,6 +2374,7 @@ const app = {
                             ${item.rooms ? `<span class="mini-tag gray">${item.rooms}</span>` : ''}
                             ${item.size_net ? `<span class="mini-tag gray">${item.size_net} m²</span>` : ''}
                         </div>
+                        ${item.external_link ? `<a href="${item.external_link}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="margin-top:8px; background:#3b82f6; color:white; font-size:11px; padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-arrow-square-out"></i> İlana Git</a>` : ''}
                     </div>
                     ${customerNote ? `
                     <div style="background:#fffbeb; padding:6px 8px; border-top:1px dashed #fbbf24; font-size:11px; color:#92400e; margin-top:8px; border-radius:0 0 8px 8px;">
