@@ -4002,3 +4002,49 @@ app.filterListingsByNeighborhood = function (name) {
     }, 50);
 };
 
+// --- LIGHTBOX FOR FSBO PHOTOS ---
+app.openLightbox = function (src) {
+    let overlay = document.getElementById('lightbox-overlay');
+    if (!overlay) {
+        // Create lightbox overlay dynamically
+        overlay = document.createElement('div');
+        overlay.id = 'lightbox-overlay';
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99999; display:flex; align-items:center; justify-content:center; cursor:pointer;';
+        overlay.onclick = function () { app.closeLightbox(); };
+
+        const img = document.createElement('img');
+        img.id = 'lightbox-image';
+        img.style.cssText = 'max-width:90%; max-height:90%; object-fit:contain; border-radius:8px; box-shadow:0 10px 50px rgba(0,0,0,0.5);';
+        img.onclick = function (e) { e.stopPropagation(); };
+
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = 'position:absolute; top:20px; right:30px; font-size:40px; color:white; background:none; border:none; cursor:pointer;';
+        closeBtn.onclick = function () { app.closeLightbox(); };
+
+        overlay.appendChild(img);
+        overlay.appendChild(closeBtn);
+        document.body.appendChild(overlay);
+    }
+
+    const img = document.getElementById('lightbox-image');
+    img.src = src;
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+};
+
+app.closeLightbox = function () {
+    const overlay = document.getElementById('lightbox-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+};
+
+// Close lightbox with ESC key
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        app.closeLightbox();
+    }
+});
+
