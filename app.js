@@ -4004,21 +4004,28 @@ app.filterListingsByNeighborhood = function (name) {
 
 // --- LIGHTBOX FOR FSBO PHOTOS ---
 app.openLightbox = function (src) {
+    console.log('openLightbox called with src:', src ? src.substring(0, 100) + '...' : 'NO SRC');
+
+    if (!src) {
+        console.error('No image source provided to lightbox');
+        return;
+    }
+
     let overlay = document.getElementById('lightbox-overlay');
     if (!overlay) {
         // Create lightbox overlay dynamically
         overlay = document.createElement('div');
         overlay.id = 'lightbox-overlay';
-        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99999; display:flex; align-items:center; justify-content:center;';
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99999; display:none; align-items:center; justify-content:center;';
 
         const img = document.createElement('img');
         img.id = 'lightbox-image';
-        img.style.cssText = 'max-width:90%; max-height:90%; object-fit:contain; border-radius:8px; box-shadow:0 10px 50px rgba(0,0,0,0.5);';
+        img.style.cssText = 'max-width:90vw; max-height:90vh; object-fit:contain; border-radius:8px;';
 
         const closeBtn = document.createElement('button');
         closeBtn.id = 'lightbox-close';
         closeBtn.innerHTML = '&times;';
-        closeBtn.style.cssText = 'position:absolute; top:20px; right:30px; font-size:50px; color:white; background:none; border:none; cursor:pointer; padding:10px;';
+        closeBtn.style.cssText = 'position:absolute; top:10px; right:20px; font-size:50px; color:white; background:none; border:none; cursor:pointer; padding:15px; z-index:100000;';
 
         overlay.appendChild(img);
         overlay.appendChild(closeBtn);
@@ -4026,7 +4033,10 @@ app.openLightbox = function (src) {
     }
 
     const img = document.getElementById('lightbox-image');
-    img.src = src;
+    if (img) {
+        img.src = src;
+        console.log('Image src set successfully');
+    }
     overlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 };
@@ -4036,35 +4046,31 @@ app.closeLightbox = function () {
     if (overlay) {
         overlay.style.display = 'none';
         document.body.style.overflow = '';
+        // Clear the image src
+        const img = document.getElementById('lightbox-image');
+        if (img) img.src = '';
     }
 };
 
 // Event delegation for FSBO photo clicks (mobile-friendly)
 document.addEventListener('click', function (e) {
+    const target = e.target;
+
     // Check if clicked on FSBO photo thumbnail
-    if (e.target.classList.contains('fsbo-photo-thumb')) {
+    if (target.classList && target.classList.contains('fsbo-photo-thumb')) {
         e.preventDefault();
         e.stopPropagation();
-        const src = e.target.src;
+        const src = target.getAttribute('src') || target.src;
+        console.log('Photo clicked, src:', src ? 'exists' : 'missing');
         if (src) {
             app.openLightbox(src);
         }
+        return;
     }
 
-    // Check if clicked on lightbox overlay or close button
-    if (e.target.id === 'lightbox-overlay' || e.target.id === 'lightbox-close') {
+    // Check if clicked on lightbox overlay (but not the image)
+    if (target.id === 'lightbox-overlay' || target.id === 'lightbox-close') {
         app.closeLightbox();
-    }
-});
-
-// Touch support for mobile
-document.addEventListener('touchend', function (e) {
-    if (e.target.classList.contains('fsbo-photo-thumb')) {
-        e.preventDefault();
-        const src = e.target.src;
-        if (src) {
-            app.openLightbox(src);
-        }
     }
 });
 
