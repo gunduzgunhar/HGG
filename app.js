@@ -2305,9 +2305,9 @@ const app = {
             // Active checks
             if (item.status === 'sold' || item.status === 'cancelled') return false;
 
-            // Budget (allow +20%)
+            // Budget (allow +15%)
             const price = parseInt(item.price) || 0;
-            if (price > budget * 1.25) return false;
+            if (price > budget * 1.15) return false;
 
             // Rooms
             if (roomPref && item.rooms && !item.rooms.includes(roomPref)) return false;
