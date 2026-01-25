@@ -2306,7 +2306,9 @@ const app = {
             if (item.status === 'sold' || item.status === 'cancelled') return false;
 
             // Budget (allow +15%)
-            const price = parseInt(item.price) || 0;
+            // Fix parsing for dotted prices like "4.500.000"
+            const rawPrice = String(item.price || '0').replace(/\./g, '');
+            const price = parseInt(rawPrice) || 0;
             if (price > budget * 1.15) return false;
 
             // Rooms
@@ -2314,7 +2316,7 @@ const app = {
 
             // Location Check
             if (regions.length > 0) {
-                const itemLoc = (item.location || '').toLowerCase();
+                const itemLoc = (item.location || (item.district ? item.district + ' ' + (item.neighborhood || '') : '') || '').toLowerCase();
                 const matchRegion = regions.some(r => {
                     const distMatch = itemLoc.includes(r.district);
                     const neighMatch = !r.neighborhood || itemLoc.includes(r.neighborhood);
@@ -2327,16 +2329,30 @@ const app = {
 
         const listingMatches = this.data.listings.filter(checkMatch);
         const findingMatches = (this.data.findings || []).filter(checkMatch);
+        const fsboMatches = (this.data.fsbo || []).filter(checkMatch);
 
         const container = document.getElementById('finder-results');
         if (!container) return;
 
         const renderMatchCard = (item, source) => {
-            const price = parseInt(item.price).toLocaleString('tr-TR');
-            const title = item.title || 'Başlıksız';
-            const location = item.location || '';
-            const badge = source === 'finding' ? '<span class="mini-tag blue">BULUM</span>' : '<span class="mini-tag green">İLAN</span>';
-            const bg = source === 'finding' ? '#eff6ff' : 'white';
+            const rawPrice = String(item.price || '0').replace(/\./g, '');
+            const price = parseInt(rawPrice).toLocaleString('tr-TR');
+            const title = item.title || item.owner || 'Başlıksız';
+            const location = item.location || (item.district ? item.district + ', ' + item.neighborhood : '');
+
+            let badge = '<span class="mini-tag green">İLAN</span>';
+            let bg = 'white';
+
+            if (source === 'finding') {
+                badge = '<span class="mini-tag blue">BULUM</span>';
+                bg = '#eff6ff';
+            } else if (source === 'fsbo') {
+                badge = '<span class="mini-tag warn">SAHİBİNDEN</span>';
+                bg = '#fffbeb';
+            }
+
+            // Link normalization (Listings use external_link, FSBO uses link)
+            const itemLink = item.external_link || item.link;
 
             // CUSTOMER SPECIFIC NOTE LOGIC
             const interaction = (customer.interactions || {})[item.id];
@@ -2376,7 +2392,7 @@ const app = {
                             ${item.damage ? `<span class="mini-tag ${item.damage.includes('Hasarsız') ? 'green' : item.damage.includes('Az') ? 'warn' : 'red'}">${item.damage}</span>` : ''}
                             ${item.interior_condition ? `<span class="mini-tag ${(item.interior_condition.includes('Full') || item.interior_condition === 'Yapılı') ? 'green' : (item.interior_condition === 'Normal') ? 'gray' : 'warn'}">${item.interior_condition}</span>` : ''}
                         </div>
-                        ${item.external_link ? `<a href="${item.external_link}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="margin-top:8px; background:#3b82f6; color:white; font-size:11px; padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-arrow-square-out"></i> İlana Git</a>` : ''}
+                        ${itemLink ? `<a href="${itemLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="margin-top:8px; background:#3b82f6; color:white; font-size:11px; padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-arrow-square-out"></i> İlana Git</a>` : ''}
                     </div>
                     ${customerNote ? `
                     <div style="background:#fffbeb; padding:6px 8px; border-top:1px dashed #fbbf24; font-size:11px; color:#92400e; margin-top:8px; border-radius:0 0 8px 8px;">
@@ -2392,6 +2408,24 @@ const app = {
         } else {
             html += listingMatches.map(x => renderMatchCard(x, 'listing')).join('');
             html += findingMatches.map(x => renderMatchCard(x, 'finding')).join('');
+
+            if (fsboMatches.length > 0) {
+                html += `
+                <div style="grid-column: 1 / -1; margin-top: 8px;">
+                     <details style="background:white; border:1px solid #fed7aa; border-radius:8px; overflow:hidden;">
+                        <summary style="padding:12px 16px; background:#fff7ed; cursor:pointer; font-weight:600; color:#c2410c; display:flex; justify-content:space-between; align-items:center; list-style:none;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <i class="ph ph-user-circle" style="font-size:20px;"></i>
+                                <span>Sahibinden (FSBO) Fırsatları (${fsboMatches.length})</span>
+                            </div>
+                            <i class="ph ph-caret-down"></i>
+                        </summary>
+                        <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:16px; border-top:1px solid #fed7aa; background:#fffbeb;">
+                            ${fsboMatches.map(x => renderMatchCard(x, 'fsbo')).join('')}
+                        </div>
+                    </details>
+                </div>`;
+            }
         }
 
         container.innerHTML = html;
