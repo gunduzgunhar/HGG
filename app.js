@@ -3519,102 +3519,65 @@ app.populateEditFsbo = function (id) {
     // Change Title/Button
     document.querySelector('#modal-add-fsbo h3').textContent = 'FSBO Düzenle';
     document.querySelector('#form-add-fsbo button[type="submit"]').textContent = 'Güncelle';
+
+    // Populate Photos Preview
+    app.initFsboPhotos(); // Clear first
+    if (item.photos && item.photos.length > 0) {
+        this.fsboPhotos = [...item.photos];
+    } else if (item.photo) {
+        this.fsboPhotos = [item.photo];
+    }
+    this.renderFsboImagePreview();
 };
 
 app.addFsbo = function (formData) {
-    const fileInput = document.getElementById('fsbo-photo-input');
-    const files = fileInput && fileInput.files;
     const form = document.getElementById('form-add-fsbo');
     const editId = form.dataset.editId; // Get ID if editing
 
-    const saveItem = (photos = []) => {
-        let finalPhotos = photos;
+    // Use the photos currently in the preview array (already base64)
+    const currentPhotos = this.fsboPhotos || [];
 
-        // If editing and no new photos selected, keep old ones
-        if (editId && (!photos || photos.length === 0)) {
-            const existing = this.data.fsbo.find(x => x.id === editId);
-            if (existing) finalPhotos = existing.photos || (existing.photo ? [existing.photo] : []);
-        } else if (editId && photos.length > 0) {
-            // Merge new photos with existing
-            const existing = this.data.fsbo.find(x => x.id === editId);
-            if (existing && existing.photos) {
-                finalPhotos = [...existing.photos, ...photos];
-            } else if (existing && existing.photo) {
-                finalPhotos = [existing.photo, ...photos];
-            }
-        }
-
-        const newItem = {
-            id: editId || 'fsbo_' + Date.now(),
-            owner: formData.get('owner'),
-            district: formData.get('district'),
-            neighborhood: formData.get('neighborhood'),
-            phone: formData.get('phone'),
-            price: formData.get('price') ? formData.get('price').replace(/\./g, '') : 0,
-            link: formData.get('link'),
-            status: formData.get('status'),
-            notes: formData.get('notes'),
-            start_date: formData.get('start_date'),
-            end_date: formData.get('end_date'),
-            // New property detail fields
-            rooms: formData.get('rooms'),
-            floor_current: formData.get('floor_current'),
-            floor_total: formData.get('floor_total'),
-            building_age: formData.get('building_age'),
-            building_name: formData.get('building_name'),
-            photos: finalPhotos,
-            date: new Date().toISOString()
-        };
-
-        if (!this.data.fsbo) this.data.fsbo = [];
-
-        if (editId) {
-            const idx = this.data.fsbo.findIndex(x => x.id === editId);
-            if (idx > -1) this.data.fsbo[idx] = newItem;
-            // Reset UI state
-            delete form.dataset.editId;
-            document.querySelector('#modal-add-fsbo h3').textContent = 'Yeni FSBO Fırsatı';
-            document.querySelector('#form-add-fsbo button[type="submit"]').textContent = 'Kaydet';
-        } else {
-            this.data.fsbo.push(newItem);
-        }
-
-        this.saveData('fsbo');
-        this.renderFsboList();
-        this.modals.closeAll();
-        form.reset();
+    const newItem = {
+        id: editId || 'fsbo_' + Date.now(),
+        owner: formData.get('owner'),
+        district: formData.get('district'),
+        neighborhood: formData.get('neighborhood'),
+        phone: formData.get('phone'),
+        price: formData.get('price') ? formData.get('price').replace(/\./g, '') : 0,
+        link: formData.get('link'),
+        status: formData.get('status'),
+        notes: formData.get('notes'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date'),
+        // New property detail fields
+        rooms: formData.get('rooms'),
+        floor_current: formData.get('floor_current'),
+        floor_total: formData.get('floor_total'),
+        building_age: formData.get('building_age'),
+        building_name: formData.get('building_name'),
+        photos: currentPhotos,
+        date: new Date().toISOString()
     };
 
-    if (files && files.length > 0) {
-        const processFile = (file) => {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = function () {
-                    const img = new Image();
-                    img.src = reader.result;
-                    img.onload = function () {
-                        const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 1200; // High quality
-                        const scale = Math.min(1, MAX_WIDTH / img.width); // Don't upscale
-                        canvas.width = img.width * scale;
-                        canvas.height = img.height * scale;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.92));
-                    };
-                };
-                reader.readAsDataURL(file);
-            });
-        };
+    if (!this.data.fsbo) this.data.fsbo = [];
 
-        // Limit to 5 photos
-        const filesToProcess = Array.from(files).slice(0, 5);
-        Promise.all(filesToProcess.map(processFile)).then(photos => {
-            saveItem(photos);
-        });
+    if (editId) {
+        const idx = this.data.fsbo.findIndex(x => x.id === editId);
+        if (idx > -1) this.data.fsbo[idx] = newItem;
+        // Reset UI state
+        delete form.dataset.editId;
+        document.querySelector('#modal-add-fsbo h3').textContent = 'Yeni FSBO Fırsatı';
+        document.querySelector('#form-add-fsbo button[type="submit"]').textContent = 'Kaydet';
     } else {
-        saveItem([]);
+        this.data.fsbo.push(newItem);
     }
+
+    this.saveData('fsbo');
+    this.renderFsboList();
+    this.modals.closeAll();
+    form.reset();
+    // Clear photos
+    this.initFsboPhotos();
 };
 
 app.deleteFsbo = function (id) {
