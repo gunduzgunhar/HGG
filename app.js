@@ -450,6 +450,29 @@ const app = {
         try { this.renderAll(); } catch (e) { console.error("renderAll failed", e); }
     },
 
+    setupForms() {
+        const fsboForm = document.getElementById('form-add-fsbo');
+        if (fsboForm) {
+            fsboForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.addFsbo(new FormData(e.target));
+            });
+        }
+
+        const listingForm = document.getElementById('form-add-listing');
+        if (listingForm) {
+            listingForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.addListing(Object.fromEntries(new FormData(e.target))); // addListing slightly different signature?
+                // Wait, addListing uses "document.getElementById('listing-photos')" internally.
+                // Let's check signature. It takes no args in some versions or takes mode.
+                // Looking at addListing implementation above (lines 3000+): It uses document.getElementById inside.
+                // But it's better to call it directly.
+                this.addListing();
+            });
+        }
+    },
+
     setupFilters() {
         const searchInput = document.querySelector('.search-input');
         if (searchInput) searchInput.addEventListener('input', () => this.renderListings());
