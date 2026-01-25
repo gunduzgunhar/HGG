@@ -2110,7 +2110,7 @@ const app = {
                                          </span>
                                          ${item.deed_status ? `<span class="mini-tag gray">${item.deed_status}</span>` : ''}
                                          ${item.damage ? `<span class="mini-tag ${item.damage.includes('Hasarsız') ? 'green' : item.damage.includes('Az') ? 'warn' : 'red'}">${item.damage}</span>` : ''}
-                                         ${item.interior_condition ? `<span class="mini-tag ${item.interior_condition.includes('Lüks') || item.interior_condition.includes('Masrafsız') ? 'green' : 'warn'}">${item.interior_condition}</span>` : ''}
+                                         ${item.interior_condition ? `<span class="mini-tag ${(item.interior_condition.includes('Full') || item.interior_condition === 'Yapılı') ? 'green' : (item.interior_condition === 'Normal') ? 'gray' : 'warn'}">${item.interior_condition}</span>` : ''}
                                          ${item.site_features ? `<span class="mini-tag blue">${item.site_features}</span>` : ''}
                                     </div>
                                     
@@ -2373,6 +2373,8 @@ const app = {
                             ${badge}
                             ${item.rooms ? `<span class="mini-tag gray">${item.rooms}</span>` : ''}
                             ${item.size_net ? `<span class="mini-tag gray">${item.size_net} m²</span>` : ''}
+                            ${item.damage ? `<span class="mini-tag ${item.damage.includes('Hasarsız') ? 'green' : item.damage.includes('Az') ? 'warn' : 'red'}">${item.damage}</span>` : ''}
+                            ${item.interior_condition ? `<span class="mini-tag ${(item.interior_condition.includes('Full') || item.interior_condition === 'Yapılı') ? 'green' : (item.interior_condition === 'Normal') ? 'gray' : 'warn'}">${item.interior_condition}</span>` : ''}
                         </div>
                         ${item.external_link ? `<a href="${item.external_link}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="margin-top:8px; background:#3b82f6; color:white; font-size:11px; padding:6px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="ph ph-arrow-square-out"></i> İlana Git</a>` : ''}
                     </div>
