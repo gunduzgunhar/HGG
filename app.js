@@ -3318,10 +3318,10 @@ app.renderFsboList = function () {
 
         let galleryHtml = '';
         if (photoArray.length > 0) {
-            const photosInner = photoArray.map(src =>
-                `<img src="${src}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox('${src}')">`
+            const photosInner = photoArray.map((src, idx) =>
+                `<img src="${src}" class="fsbo-photo-thumb" data-fsbo-id="${item.id}" data-photo-idx="${idx}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer; -webkit-tap-highlight-color:transparent;">`
             ).join('');
-            galleryHtml = `<div style="display:flex; gap:5px; margin-bottom:10px; overflow-x:auto; padding-bottom:5px;">${photosInner}</div>`;
+            galleryHtml = `<div class="fsbo-gallery" data-photos='${JSON.stringify(photoArray)}' style="display:flex; gap:5px; margin-bottom:10px; overflow-x:auto; padding-bottom:5px;">${photosInner}</div>`;
         }
 
         card.innerHTML = `
@@ -4009,18 +4009,16 @@ app.openLightbox = function (src) {
         // Create lightbox overlay dynamically
         overlay = document.createElement('div');
         overlay.id = 'lightbox-overlay';
-        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99999; display:flex; align-items:center; justify-content:center; cursor:pointer;';
-        overlay.onclick = function () { app.closeLightbox(); };
+        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:99999; display:flex; align-items:center; justify-content:center;';
 
         const img = document.createElement('img');
         img.id = 'lightbox-image';
         img.style.cssText = 'max-width:90%; max-height:90%; object-fit:contain; border-radius:8px; box-shadow:0 10px 50px rgba(0,0,0,0.5);';
-        img.onclick = function (e) { e.stopPropagation(); };
 
         const closeBtn = document.createElement('button');
+        closeBtn.id = 'lightbox-close';
         closeBtn.innerHTML = '&times;';
-        closeBtn.style.cssText = 'position:absolute; top:20px; right:30px; font-size:40px; color:white; background:none; border:none; cursor:pointer;';
-        closeBtn.onclick = function () { app.closeLightbox(); };
+        closeBtn.style.cssText = 'position:absolute; top:20px; right:30px; font-size:50px; color:white; background:none; border:none; cursor:pointer; padding:10px;';
 
         overlay.appendChild(img);
         overlay.appendChild(closeBtn);
@@ -4040,6 +4038,35 @@ app.closeLightbox = function () {
         document.body.style.overflow = '';
     }
 };
+
+// Event delegation for FSBO photo clicks (mobile-friendly)
+document.addEventListener('click', function (e) {
+    // Check if clicked on FSBO photo thumbnail
+    if (e.target.classList.contains('fsbo-photo-thumb')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const src = e.target.src;
+        if (src) {
+            app.openLightbox(src);
+        }
+    }
+
+    // Check if clicked on lightbox overlay or close button
+    if (e.target.id === 'lightbox-overlay' || e.target.id === 'lightbox-close') {
+        app.closeLightbox();
+    }
+});
+
+// Touch support for mobile
+document.addEventListener('touchend', function (e) {
+    if (e.target.classList.contains('fsbo-photo-thumb')) {
+        e.preventDefault();
+        const src = e.target.src;
+        if (src) {
+            app.openLightbox(src);
+        }
+    }
+});
 
 // Close lightbox with ESC key
 document.addEventListener('keydown', function (e) {
