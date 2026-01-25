@@ -4003,52 +4003,45 @@ app.filterListingsByNeighborhood = function (name) {
 };
 
 // --- LIGHTBOX FOR FSBO PHOTOS ---
-app.openLightbox = function (src) {
-    console.log('openLightbox called with src:', src ? src.substring(0, 100) + '...' : 'NO SRC');
+app.openLightbox = function (imageSrc) {
+    // Always remove old lightbox first
+    app.closeLightbox();
 
-    if (!src) {
-        console.error('No image source provided to lightbox');
-        return;
-    }
+    if (!imageSrc) return;
 
-    let overlay = document.getElementById('lightbox-overlay');
-    if (!overlay) {
-        // Create lightbox overlay dynamically
-        overlay = document.createElement('div');
-        overlay.id = 'lightbox-overlay';
-        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99999; display:none; align-items:center; justify-content:center;';
+    // Create fresh lightbox element
+    const lb = document.createElement('div');
+    lb.id = 'fsbo-lightbox';
+    lb.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:999999;display:flex;align-items:center;justify-content:center;';
 
-        const img = document.createElement('img');
-        img.id = 'lightbox-image';
-        img.style.cssText = 'max-width:90vw; max-height:90vh; object-fit:contain; border-radius:8px;';
+    // Close button
+    const closeBtn = document.createElement('span');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = 'position:absolute;top:10px;right:20px;font-size:50px;color:white;cursor:pointer;font-weight:bold;';
+    closeBtn.onclick = function () { app.closeLightbox(); };
 
-        const closeBtn = document.createElement('button');
-        closeBtn.id = 'lightbox-close';
-        closeBtn.innerHTML = '&times;';
-        closeBtn.style.cssText = 'position:absolute; top:10px; right:20px; font-size:50px; color:white; background:none; border:none; cursor:pointer; padding:15px; z-index:100000;';
+    // Image
+    const img = document.createElement('img');
+    img.src = imageSrc;
+    img.style.cssText = 'max-width:90%;max-height:90%;object-fit:contain;';
 
-        overlay.appendChild(img);
-        overlay.appendChild(closeBtn);
-        document.body.appendChild(overlay);
-    }
+    lb.appendChild(closeBtn);
+    lb.appendChild(img);
 
-    const img = document.getElementById('lightbox-image');
-    if (img) {
-        img.src = src;
-        console.log('Image src set successfully');
-    }
-    overlay.style.display = 'flex';
+    // Click outside to close
+    lb.onclick = function (e) {
+        if (e.target === lb) app.closeLightbox();
+    };
+
+    document.body.appendChild(lb);
     document.body.style.overflow = 'hidden';
 };
 
 app.closeLightbox = function () {
-    const overlay = document.getElementById('lightbox-overlay');
-    if (overlay) {
-        overlay.style.display = 'none';
+    const lb = document.getElementById('fsbo-lightbox');
+    if (lb) {
+        lb.remove();
         document.body.style.overflow = '';
-        // Clear the image src
-        const img = document.getElementById('lightbox-image');
-        if (img) img.src = '';
     }
 };
 
@@ -4061,16 +4054,9 @@ document.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
         const src = target.getAttribute('src') || target.src;
-        console.log('Photo clicked, src:', src ? 'exists' : 'missing');
         if (src) {
             app.openLightbox(src);
         }
-        return;
-    }
-
-    // Check if clicked on lightbox overlay (but not the image)
-    if (target.id === 'lightbox-overlay' || target.id === 'lightbox-close') {
-        app.closeLightbox();
     }
 });
 
