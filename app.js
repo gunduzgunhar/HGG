@@ -3572,6 +3572,11 @@ app.renderFsboList = function () {
     const createFsboCard = (item) => {
         const card = document.createElement('div');
         card.className = 'listing-card';
+        card.style.cursor = 'pointer';
+        card.onclick = (e) => {
+            if (e.target.closest('button, a, .fsbo-gallery')) return;
+            app.populateEditFsbo(item.id);
+        };
 
         let statusColor = '#64748b'; // gray
         if (item.status && item.status.includes('Randevu')) statusColor = '#d97706'; // orange
