@@ -463,18 +463,6 @@ const app = {
             });
         }
 
-        if (listingForm) {
-            listingForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.addListing(Object.fromEntries(new FormData(e.target))); // addListing slightly different signature?
-                // Wait, addListing uses "document.getElementById('listing-photos')" internally.
-                // Let's check signature. It takes no args in some versions or takes mode.
-                // Looking at addListing implementation above (lines 3000+): It uses document.getElementById inside.
-                // But it's better to call it directly.
-                this.addListing();
-            });
-        }
-
         const targetForm = document.getElementById('form-add-target');
         if (targetForm) {
             targetForm.addEventListener('submit', (e) => {
