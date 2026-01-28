@@ -840,48 +840,6 @@
                                 </div>
                             </div>
 
-                            <!-- Add Target Modal -->
-                            <div class="modal-overlay" id="modal-add-target">
-                                <div class="modal">
-                                    <div class="modal-header">
-                                        <h3>Yeni Hedef İlan Ekle</h3>
-                                        <button class="close-modal"><i class="ph ph-x"></i></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <form id="form-add-target">
-                                            <div class="form-group">
-                                                <label>İlan Başlığı / Açıklama</label>
-                                                <input type="text" name="title" required
-                                                    placeholder="Örn: Toros'taki rakip ilan">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>İlan Linki (Varsa)</label>
-                                                <input type="url" name="link" placeholder="https://...">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Fiyat</label>
-                                                <input type="text" name="price" oninput="app.formatPriceInput(this)"
-                                                    placeholder="0">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Açık Adres (Konum İçin)</label>
-                                                <textarea name="address" rows="3" required
-                                                    placeholder="Tam adresi buraya yazın. Yol tarifi için kullanılacak."></textarea>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Emlakçı / İletişim Notu</label>
-                                                <input type="text" name="agent_note"
-                                                    placeholder="Örn: X Emlak - Ahmet Bey">
-                                            </div>
-                                            <div class="form-actions">
-                                                <button type="button" class="btn btn-text close-modal">İptal</button>
-                                                <button type="submit" class="btn btn-primary"
-                                                    style="background-color: #dc2626; border-color: #dc2626;">Kaydet</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
 
                             <!-- Bookmarklet Help Section -->
                             <div id="bookmarklet-help"
@@ -1067,7 +1025,48 @@
         </div>
         </div>
 
-        <!-- Edit Listing Modal -->
+        <!-- Add Target Modal -->
+        <div class="modal-overlay" id="modal-add-target">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>Yeni Hedef İlan Ekle</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-target">
+                        <div class="form-group">
+                            <label>İlan Başlığı / Açıklama</label>
+                            <input type="text" name="title" required
+                                placeholder="Örn: Toros'taki rakip ilan">
+                        </div>
+                        <div class="form-group">
+                            <label>İlan Linki (Varsa)</label>
+                            <input type="url" name="link" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label>Fiyat</label>
+                            <input type="text" name="price" oninput="app.formatPriceInput(this)"
+                                placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Açık Adres (Konum İçin)</label>
+                            <textarea name="address" rows="3" required
+                                placeholder="Tam adresi buraya yazın. Yol tarifi için kullanılacak."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Emlakçı / İletişim Notu</label>
+                            <input type="text" name="agent_note"
+                                placeholder="Örn: X Emlak - Ahmet Bey">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="submit" class="btn btn-primary"
+                                style="background-color: #dc2626; border-color: #dc2626;">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
         <!-- Edit Listing Modal -->
         <div class="modal-overlay" id="modal-edit-listing">
