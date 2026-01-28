@@ -3575,7 +3575,7 @@ app.renderFsboList = function () {
         card.style.cursor = 'pointer';
         card.onclick = (e) => {
             if (e.target.closest('button, a, .fsbo-gallery')) return;
-            app.populateEditFsbo(item.id);
+            app.openFsboDetail(item.id);
         };
 
         let statusColor = '#64748b'; // gray
@@ -3698,6 +3698,79 @@ app.renewFsboListing = function (id) {
     this.saveData('fsbo');
     this.renderFsboList();
     alert("İlan Yenilendi!");
+};
+
+app.openFsboDetail = function (id) {
+    const item = this.data.fsbo.find(x => x.id === id);
+    if (!item) return;
+
+    let statusColor = '#64748b';
+    if (item.status && item.status.includes('Randevu')) statusColor = '#d97706';
+    if (item.status && item.status.includes('Olumsuz')) statusColor = '#991b1b';
+    if (item.status && item.status.includes('Portföy')) statusColor = '#16a34a';
+
+    let photoArray = [];
+    if (item.photos && Array.isArray(item.photos)) photoArray = item.photos;
+    else if (item.photo) photoArray = [item.photo];
+
+    const photoHtml = photoArray.length > 0
+        ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+            ${photoArray.map(src => `<img src="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox('${src.replace(/'/g, "\\'")}')">`).join('')}
+           </div>`
+        : '';
+
+    const row = (icon, label, value) => value
+        ? `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+            <i class="ph ph-${icon}" style="color:#64748b; font-size:16px; width:20px; text-align:center;"></i>
+            <span style="color:#64748b; font-size:13px; min-width:100px;">${label}</span>
+            <span style="font-size:14px; color:#1e293b; font-weight:500;">${value}</span>
+           </div>`
+        : '';
+
+    document.getElementById('fsbo-detail-title').textContent = item.owner || 'FSBO Detay';
+    document.getElementById('fsbo-detail-body').innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="font-size:22px; font-weight:700; color:#1e293b;">${parseInt(item.price || 0).toLocaleString('tr-TR')} TL</div>
+            <span style="background:${statusColor}; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${item.status || '-'}</span>
+        </div>
+
+        ${photoHtml}
+
+        <div style="margin-bottom:16px;">
+            ${row('map-pin', 'Konum', (item.district || '') + (item.neighborhood ? ' / ' + item.neighborhood : ''))}
+            ${row('house', 'Oda', item.rooms)}
+            ${row('stairs', 'Kat', item.floor_current ? item.floor_current + (item.floor_total ? ' / ' + item.floor_total : '') : '')}
+            ${row('calendar-blank', 'Bina Yaşı', item.building_age ? item.building_age + ' yıl' : '')}
+            ${row('buildings', 'Bina Adı', item.building_name)}
+            ${row('phone', 'Telefon', item.phone ? '<a href="tel:' + item.phone.replace(/\\s/g, '') + '" style="color:#1e293b; text-decoration:none; font-weight:600;">' + item.phone + '</a>' : '')}
+            ${row('calendar-plus', 'Başlangıç', item.start_date ? new Date(item.start_date).toLocaleDateString('tr-TR') : '')}
+            ${row('calendar-x', 'Bitiş', item.end_date ? new Date(item.end_date).toLocaleDateString('tr-TR') : '')}
+        </div>
+
+        ${item.link ? `<a href="${item.link}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; color:#3b82f6; font-size:13px; margin-bottom:12px;">
+            <i class="ph ph-arrow-square-out"></i> İlana Git
+        </a>` : ''}
+
+        ${item.notes ? `
+        <div style="background:#f8fafc; padding:12px; border-radius:8px; border-left:3px solid #d1d5db; margin-bottom:16px;">
+            <div style="font-size:11px; color:#9ca3af; margin-bottom:4px;"><i class="ph ph-note-pencil"></i> Notlar</div>
+            <div style="font-size:13px; color:#475569; white-space:pre-wrap; line-height:1.5;">${item.notes}</div>
+        </div>` : ''}
+
+        <div style="display:flex; gap:8px; border-top:1px solid #e5e7eb; padding-top:14px;">
+            <button class="btn btn-sm" onclick="app.modals.closeAll(); app.populateEditFsbo('${item.id}')" style="flex:1; background:#4f46e5; color:white; border:none; border-radius:8px; padding:10px; font-size:13px; cursor:pointer;">
+                <i class="ph ph-pencil-simple"></i> Düzenle
+            </button>
+            <button class="btn btn-sm" onclick="app.openFsboStatusModal('${item.id}')" style="flex:1; background:#f3f4f6; color:#374151; border:none; border-radius:8px; padding:10px; font-size:13px; cursor:pointer;">
+                <i class="ph ph-tag"></i> Durum
+            </button>
+            <button class="btn btn-sm" onclick="app.renewFsboListing('${item.id}')" style="background:#dcfce7; color:#166534; border:none; border-radius:8px; padding:10px 14px; font-size:13px; cursor:pointer;">
+                <i class="ph ph-arrows-clockwise"></i>
+            </button>
+        </div>
+    `;
+
+    this.modals.open('fsbo-detail');
 };
 
 app.openFsboStatusModal = function (id) {
