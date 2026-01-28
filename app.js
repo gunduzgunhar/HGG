@@ -4665,6 +4665,21 @@ app.targetPhoto = null;
 
 app.handleTargetPhoto = function (input) {
     if (!input.files || !input.files[0]) return;
+    this.setTargetPhotoFromFile(input.files[0]);
+};
+
+app.handleTargetPhotoPaste = function (e) {
+    e.preventDefault();
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && items[i].type.includes('image/')) {
+            this.setTargetPhotoFromFile(items[i].getAsFile());
+            return;
+        }
+    }
+};
+
+app.setTargetPhotoFromFile = function (file) {
     const reader = new FileReader();
     reader.onload = (e) => {
         this.targetPhoto = e.target.result;
@@ -4676,8 +4691,10 @@ app.handleTargetPhoto = function (input) {
                     <button onclick="event.stopPropagation(); app.removeTargetPhoto()" style="position:absolute; top:0; right:0; background:rgba(220,38,38,0.9); color:white; border:none; width:22px; height:22px; cursor:pointer; border-radius:0 0 0 4px;">&times;</button>
                 </div>`;
         }
+        const pasteArea = document.getElementById('target-photo-paste-area');
+        if (pasteArea) pasteArea.style.display = 'none';
     };
-    reader.readAsDataURL(input.files[0]);
+    reader.readAsDataURL(file);
 };
 
 app.removeTargetPhoto = function () {
@@ -4686,6 +4703,8 @@ app.removeTargetPhoto = function () {
     if (preview) preview.innerHTML = '';
     const input = document.getElementById('target-photo-input');
     if (input) input.value = '';
+    const pasteArea = document.getElementById('target-photo-paste-area');
+    if (pasteArea) pasteArea.style.display = '';
 };
 
 app.addTarget = function (formData) {
@@ -4710,6 +4729,8 @@ app.addTarget = function (formData) {
     this.targetPhoto = null;
     const preview = document.getElementById('target-photo-preview');
     if (preview) preview.innerHTML = '';
+    const pasteArea = document.getElementById('target-photo-paste-area');
+    if (pasteArea) pasteArea.style.display = '';
 };
 
 app.deleteTarget = function (id) {
