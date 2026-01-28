@@ -1033,7 +1033,7 @@
                     <button class="close-modal"><i class="ph ph-x"></i></button>
                 </div>
                 <div class="modal-body">
-                    <form id="form-add-target">
+                    <form id="form-add-target" onsubmit="return false;">
                         <div class="form-group">
                             <label>İlan Başlığı / Açıklama</label>
                             <input type="text" name="title" required
@@ -1060,8 +1060,9 @@
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-text close-modal">İptal</button>
-                            <button type="submit" class="btn btn-primary"
-                                style="background-color: #dc2626; border-color: #dc2626;">Kaydet</button>
+                            <button type="button" class="btn btn-primary"
+                                style="background-color: #dc2626; border-color: #dc2626;"
+                                onclick="app.addTarget(new FormData(document.getElementById('form-add-target')))">Kaydet</button>
                         </div>
                     </form>
                 </div>
