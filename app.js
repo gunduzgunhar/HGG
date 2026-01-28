@@ -3621,9 +3621,24 @@ app.renderFsboList = function () {
                         </div>` : ''}
                         
                         <div style="font-size:12px; color:#64748b; display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                            ${(() => {
+                                const firstDate = item.dateHistory && item.dateHistory.length > 0 ? item.dateHistory[0].start : item.start_date;
+                                if (!firstDate) return '';
+                                const diffMs = Date.now() - new Date(firstDate).getTime();
+                                const diffDays = Math.floor(diffMs / 86400000);
+                                const diffMonths = Math.floor(diffDays / 30);
+                                const ageText = diffMonths > 0 ? diffMonths + ' aydır ilanda' : diffDays + ' gündür ilanda';
+                                return '<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-weight:600;"><i class="ph ph-clock-countdown"></i> ' + ageText + '</span>';
+                            })()}
                             ${item.start_date ? `<span><i class="ph ph-calendar-plus"></i> ${new Date(item.start_date).toLocaleDateString('tr-TR')}</span>` : ''}
                             ${item.end_date ? `<span style="color:#d97706"><i class="ph ph-calendar-x"></i> ${new Date(item.end_date).toLocaleDateString('tr-TR')}</span>` : ''}
+                            ${item.dateHistory && item.dateHistory.length > 0 ? `<span style="background:#e0f2fe; color:#1e40af; padding:2px 6px; border-radius:4px;"><i class="ph ph-arrows-clockwise"></i> ${item.dateHistory.length}x yenilendi</span>` : ''}
                         </div>
+                        ${item.priceHistory && item.priceHistory.length > 0 ? `
+                        <div style="font-size:11px; color:#64748b; margin-bottom:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                            <i class="ph ph-chart-line-down" style="color:#9ca3af;"></i>
+                            ${item.priceHistory.map(p => '<s>' + parseInt(p.price).toLocaleString('tr-TR') + '</s>').join(' → ')} → <strong style="color:#1e293b;">${parseInt(item.price || 0).toLocaleString('tr-TR')} TL</strong>
+                        </div>` : ''}
                     </div>
                 </div>
 
@@ -3680,6 +3695,24 @@ app.renewFsboListing = function (id) {
     const item = this.data.fsbo.find(x => x.id === id);
     if (!item) return;
 
+    // Fiyat sor
+    const currentPrice = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '';
+    const newPriceInput = prompt(`Güncel fiyat (şu an: ${currentPrice} TL):`, currentPrice);
+    if (newPriceInput === null) return; // iptal
+
+    const newPrice = newPriceInput.replace(/\./g, '').replace(/\D/g, '');
+
+    // Fiyat geçmişine kaydet
+    if (!item.priceHistory) item.priceHistory = [];
+    if (item.price) {
+        item.priceHistory.push({
+            price: item.price,
+            date: new Date().toISOString()
+        });
+    }
+    if (newPrice) item.price = newPrice;
+
+    // Tarih geçmişine kaydet
     if (!item.dateHistory) item.dateHistory = [];
     if (item.start_date && item.end_date) {
         item.dateHistory.push({ start: item.start_date, end: item.end_date });
@@ -3697,7 +3730,19 @@ app.renewFsboListing = function (id) {
 
     this.saveData('fsbo');
     this.renderFsboList();
-    alert("İlan Yenilendi!");
+
+    // Fiyat değişimi varsa göster
+    const oldPrice = item.priceHistory.length > 0 ? parseInt(item.priceHistory[item.priceHistory.length - 1].price) : 0;
+    const np = parseInt(item.price) || 0;
+    let msg = 'İlan Yenilendi!';
+    if (oldPrice && np && oldPrice !== np) {
+        const diff = np - oldPrice;
+        const pct = ((diff / oldPrice) * 100).toFixed(0);
+        msg += diff > 0
+            ? `\nFiyat artışı: +${diff.toLocaleString('tr-TR')} TL (%${pct})`
+            : `\nFiyat düşüşü: ${diff.toLocaleString('tr-TR')} TL (%${pct})`;
+    }
+    alert(msg);
 };
 
 app.openFsboDetail = function (id) {
@@ -3727,13 +3772,61 @@ app.openFsboDetail = function (id) {
            </div>`
         : '';
 
+    // İlan yaşı hesapla
+    const firstDate = item.dateHistory && item.dateHistory.length > 0 ? item.dateHistory[0].start : item.start_date;
+    let ageHtml = '';
+    if (firstDate) {
+        const diffMs = Date.now() - new Date(firstDate).getTime();
+        const diffDays = Math.floor(diffMs / 86400000);
+        const diffMonths = Math.floor(diffDays / 30);
+        const ageText = diffMonths > 0 ? diffMonths + ' aydır ilanda' : diffDays + ' gündür ilanda';
+        ageHtml = `<span style="background:#fef3c7; color:#92400e; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600;"><i class="ph ph-clock-countdown"></i> ${ageText}</span>`;
+    }
+
+    // Fiyat geçmişi
+    let priceHistoryHtml = '';
+    if (item.priceHistory && item.priceHistory.length > 0) {
+        priceHistoryHtml = `
+        <div style="background:#fef2f2; padding:10px 12px; border-radius:8px; margin-bottom:16px; border-left:3px solid #f59e0b;">
+            <div style="font-size:11px; color:#92400e; margin-bottom:6px; font-weight:600;"><i class="ph ph-chart-line"></i> Fiyat Geçmişi</div>
+            ${item.priceHistory.map((p, i) => {
+                const prev = i === 0 ? null : parseInt(item.priceHistory[i - 1].price);
+                const cur = parseInt(p.price);
+                let changeHtml = '';
+                if (prev) {
+                    const diff = cur - prev;
+                    if (diff > 0) changeHtml = ' <span style="color:#dc2626; font-size:11px;">+' + diff.toLocaleString('tr-TR') + '</span>';
+                    else if (diff < 0) changeHtml = ' <span style="color:#16a34a; font-size:11px;">' + diff.toLocaleString('tr-TR') + '</span>';
+                }
+                return '<div style="font-size:12px; color:#64748b; padding:2px 0;">' + new Date(p.date).toLocaleDateString('tr-TR') + ' — <s>' + cur.toLocaleString('tr-TR') + ' TL</s>' + changeHtml + '</div>';
+            }).join('')}
+            <div style="font-size:13px; color:#1e293b; font-weight:700; padding-top:4px; border-top:1px solid #fde68a; margin-top:4px;">
+                Güncel: ${parseInt(item.price || 0).toLocaleString('tr-TR')} TL
+                ${(() => {
+                    const firstP = parseInt(item.priceHistory[0].price);
+                    const curP = parseInt(item.price || 0);
+                    if (!firstP || !curP || firstP === curP) return '';
+                    const d = curP - firstP;
+                    const pct = ((d / firstP) * 100).toFixed(0);
+                    return d > 0
+                        ? ' <span style="color:#dc2626; font-size:11px;">(+' + pct + '%)</span>'
+                        : ' <span style="color:#16a34a; font-size:11px;">(' + pct + '%)</span>';
+                })()}
+            </div>
+        </div>`;
+    }
+
     document.getElementById('fsbo-detail-title').textContent = item.owner || 'FSBO Detay';
     document.getElementById('fsbo-detail-body').innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
             <div style="font-size:22px; font-weight:700; color:#1e293b;">${parseInt(item.price || 0).toLocaleString('tr-TR')} TL</div>
-            <span style="background:${statusColor}; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${item.status || '-'}</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+                ${ageHtml}
+                <span style="background:${statusColor}; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${item.status || '-'}</span>
+            </div>
         </div>
 
+        ${priceHistoryHtml}
         ${photoHtml}
 
         <div style="margin-bottom:16px;">
@@ -3743,8 +3836,10 @@ app.openFsboDetail = function (id) {
             ${row('calendar-blank', 'Bina Yaşı', item.building_age ? item.building_age + ' yıl' : '')}
             ${row('buildings', 'Bina Adı', item.building_name)}
             ${row('phone', 'Telefon', item.phone ? '<a href="tel:' + item.phone.replace(/\\s/g, '') + '" style="color:#1e293b; text-decoration:none; font-weight:600;">' + item.phone + '</a>' : '')}
-            ${row('calendar-plus', 'Başlangıç', item.start_date ? new Date(item.start_date).toLocaleDateString('tr-TR') : '')}
+            ${row('calendar-plus', 'İlk İlan', firstDate ? new Date(firstDate).toLocaleDateString('tr-TR') : '')}
+            ${row('calendar-plus', 'Son Yenileme', item.start_date ? new Date(item.start_date).toLocaleDateString('tr-TR') : '')}
             ${row('calendar-x', 'Bitiş', item.end_date ? new Date(item.end_date).toLocaleDateString('tr-TR') : '')}
+            ${row('arrows-clockwise', 'Yenilenme', item.dateHistory && item.dateHistory.length > 0 ? item.dateHistory.length + ' kez' : '')}
         </div>
 
         ${item.link ? `<a href="${item.link}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; color:#3b82f6; font-size:13px; margin-bottom:12px;">
