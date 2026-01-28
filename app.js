@@ -4661,6 +4661,33 @@ document.addEventListener('click', function (e) {
 });
 
 // --- TARGET LISTINGS FEATURES ---
+app.targetPhoto = null;
+
+app.handleTargetPhoto = function (input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        this.targetPhoto = e.target.result;
+        const preview = document.getElementById('target-photo-preview');
+        if (preview) {
+            preview.innerHTML = `
+                <div style="position:relative; display:inline-block;">
+                    <img src="${this.targetPhoto}" style="width:100%; max-width:300px; height:140px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">
+                    <button onclick="event.stopPropagation(); app.removeTargetPhoto()" style="position:absolute; top:0; right:0; background:rgba(220,38,38,0.9); color:white; border:none; width:22px; height:22px; cursor:pointer; border-radius:0 0 0 4px;">&times;</button>
+                </div>`;
+        }
+    };
+    reader.readAsDataURL(input.files[0]);
+};
+
+app.removeTargetPhoto = function () {
+    this.targetPhoto = null;
+    const preview = document.getElementById('target-photo-preview');
+    if (preview) preview.innerHTML = '';
+    const input = document.getElementById('target-photo-input');
+    if (input) input.value = '';
+};
+
 app.addTarget = function (formData) {
     const newItem = {
         id: 'target_' + Date.now(),
@@ -4669,6 +4696,7 @@ app.addTarget = function (formData) {
         price: formData.get('price'),
         address: formData.get('address'),
         agent_note: formData.get('agent_note'),
+        photo: this.targetPhoto || null,
         date: new Date().toISOString()
     };
 
@@ -4679,6 +4707,9 @@ app.addTarget = function (formData) {
     this.renderTargetListings();
     this.modals.closeAll();
     document.getElementById('form-add-target').reset();
+    this.targetPhoto = null;
+    const preview = document.getElementById('target-photo-preview');
+    if (preview) preview.innerHTML = '';
 };
 
 app.deleteTarget = function (id) {
@@ -4707,7 +4738,7 @@ app.renderTargetListings = function () {
             <div class="card-badges" style="position:absolute; top:10px; right:10px;">
                  <span class="badge" style="background:#dc2626; color:white;">HEDEF</span>
             </div>
-            
+            ${item.photo ? `<img src="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer;" onclick="app.openLightbox('${item.photo.replace(/'/g, "\\'")}')" alt="Hedef ilan fotoğrafı">` : ''}
             <div class="card-content" style="padding: 15px;">
                 <h3 style="color:#991b1b; margin-bottom: 5px;">${item.title}</h3>
                 <div style="font-size: 13px; color: #7f1d1d; margin-bottom: 10px;">

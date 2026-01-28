@@ -1058,6 +1058,11 @@
                             <input type="text" name="agent_note"
                                 placeholder="Örn: X Emlak - Ahmet Bey">
                         </div>
+                        <div class="form-group">
+                            <label>Fotoğraf</label>
+                            <input type="file" id="target-photo-input" accept="image/*" onchange="app.handleTargetPhoto(this)">
+                            <div id="target-photo-preview" style="margin-top:8px;"></div>
+                        </div>
                         <div class="form-actions">
                             <button type="button" class="btn btn-text close-modal">İptal</button>
                             <button type="button" class="btn btn-primary"
