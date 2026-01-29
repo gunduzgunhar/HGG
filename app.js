@@ -16,6 +16,95 @@ const app = {
     currentCustomerRegions: [],
     currentEditRegions: [],
 
+    // --- IndexedDB Photo Storage ---
+    photoStore: {
+        db: null,
+        dbName: 'rea_photos',
+        storeName: 'photos',
+
+        init() {
+            return new Promise((resolve) => {
+                try {
+                    const request = indexedDB.open(this.dbName, 1);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        console.log('PhotoStore: IndexedDB hazır');
+                        resolve(true);
+                    };
+                    request.onerror = (e) => {
+                        console.warn('PhotoStore: IndexedDB açılamadı, fallback moda geçiliyor', e);
+                        resolve(false);
+                    };
+                } catch (e) {
+                    console.warn('PhotoStore: IndexedDB desteklenmiyor, fallback mod', e);
+                    resolve(false);
+                }
+            });
+        },
+
+        savePhoto(base64, collection, parentId) {
+            return new Promise((resolve) => {
+                if (!this.db) { resolve(null); return; }
+                const id = 'photo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+                const tx = this.db.transaction(this.storeName, 'readwrite');
+                const store = tx.objectStore(this.storeName);
+                store.put({ id, data: base64, collection, parentId, created: Date.now() });
+                tx.oncomplete = () => resolve(id);
+                tx.onerror = () => { console.warn('PhotoStore: Kayıt hatası'); resolve(null); };
+            });
+        },
+
+        getPhoto(id) {
+            return new Promise((resolve) => {
+                if (!this.db) { resolve(null); return; }
+                const tx = this.db.transaction(this.storeName, 'readonly');
+                const store = tx.objectStore(this.storeName);
+                const request = store.get(id);
+                request.onsuccess = () => resolve(request.result ? request.result.data : null);
+                request.onerror = () => resolve(null);
+            });
+        },
+
+        deletePhotos(ids) {
+            return new Promise((resolve) => {
+                if (!this.db || !ids || ids.length === 0) { resolve(); return; }
+                const tx = this.db.transaction(this.storeName, 'readwrite');
+                const store = tx.objectStore(this.storeName);
+                ids.forEach(id => { if (id && typeof id === 'string' && id.startsWith('photo_')) store.delete(id); });
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => resolve();
+            });
+        },
+
+        getAllPhotos() {
+            return new Promise((resolve) => {
+                if (!this.db) { resolve({}); return; }
+                const tx = this.db.transaction(this.storeName, 'readonly');
+                const store = tx.objectStore(this.storeName);
+                const request = store.getAll();
+                request.onsuccess = () => {
+                    const map = {};
+                    (request.result || []).forEach(item => { map[item.id] = item.data; });
+                    resolve(map);
+                };
+                request.onerror = () => resolve({});
+            });
+        }
+    },
+
+    // Geçici fotoğraf cache'leri (render sırasında kullanılır)
+    _photoCache: {},
+
+    isPhotoRef(val) {
+        return typeof val === 'string' && val.startsWith('photo_');
+    },
+
     adanaLocations: {
         "Seyhan": {
             lat: 37.0016, lng: 35.3289,
@@ -72,6 +161,56 @@ const app = {
                 "Gültepe": [37.0800, 35.4000],
                 "Osmangazi": [37.0750, 35.4200],
                 "Yıldırım": [37.0650, 35.3900]
+            }
+        }
+    },
+
+    // Fotoğraf sıkıştırma (800px max, JPEG %70)
+    compressPhoto(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = function () {
+                const img = new Image();
+                img.src = reader.result;
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const scale = Math.min(1, MAX_WIDTH / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.70));
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+    },
+
+    // Render sonrası data-photo-id attribute'larını IndexedDB'den çöz
+    async resolveRenderedPhotos(containerSelector) {
+        const container = typeof containerSelector === 'string'
+            ? document.querySelector(containerSelector)
+            : containerSelector;
+        if (!container) return;
+
+        const imgs = container.querySelectorAll('img[data-photo-id]');
+        for (const img of imgs) {
+            const photoId = img.getAttribute('data-photo-id');
+            if (!photoId) continue;
+
+            // Önce cache'e bak
+            if (this._photoCache[photoId]) {
+                img.src = this._photoCache[photoId];
+                continue;
+            }
+
+            const data = await this.photoStore.getPhoto(photoId);
+            if (data) {
+                this._photoCache[photoId] = data;
+                img.src = data;
+            } else {
+                img.style.display = 'none';
             }
         }
     },
@@ -427,6 +566,88 @@ const app = {
         this.modals.open('evaluation');
     },
 
+    async migratePhotosToIndexedDB() {
+        if (!this.photoStore.db) return;
+        if (localStorage.getItem('rea_photos_migrated')) return;
+
+        console.log('PhotoStore: Migrasyon başlıyor...');
+        let migratedCount = 0;
+
+        // Listings fotoğrafları
+        for (const item of (this.data.listings || [])) {
+            if (item.photos && Array.isArray(item.photos)) {
+                const newPhotos = [];
+                for (const photo of item.photos) {
+                    if (photo && !this.isPhotoRef(photo) && photo.startsWith('data:')) {
+                        const id = await this.photoStore.savePhoto(photo, 'listings', item.id);
+                        newPhotos.push(id || photo);
+                        if (id) migratedCount++;
+                    } else {
+                        newPhotos.push(photo);
+                    }
+                }
+                item.photos = newPhotos;
+            }
+        }
+
+        // Findings fotoğrafları
+        for (const item of (this.data.findings || [])) {
+            if (item.photos && Array.isArray(item.photos)) {
+                const newPhotos = [];
+                for (const photo of item.photos) {
+                    if (photo && !this.isPhotoRef(photo) && photo.startsWith('data:')) {
+                        const id = await this.photoStore.savePhoto(photo, 'findings', item.id);
+                        newPhotos.push(id || photo);
+                        if (id) migratedCount++;
+                    } else {
+                        newPhotos.push(photo);
+                    }
+                }
+                item.photos = newPhotos;
+            }
+        }
+
+        // FSBO fotoğrafları
+        for (const item of (this.data.fsbo || [])) {
+            if (item.photos && Array.isArray(item.photos)) {
+                const newPhotos = [];
+                for (const photo of item.photos) {
+                    if (photo && !this.isPhotoRef(photo) && photo.startsWith('data:')) {
+                        const id = await this.photoStore.savePhoto(photo, 'fsbo', item.id);
+                        newPhotos.push(id || photo);
+                        if (id) migratedCount++;
+                    } else {
+                        newPhotos.push(photo);
+                    }
+                }
+                item.photos = newPhotos;
+            }
+            if (item.photo && !this.isPhotoRef(item.photo) && item.photo.startsWith('data:')) {
+                const id = await this.photoStore.savePhoto(item.photo, 'fsbo', item.id);
+                if (id) { item.photo = id; migratedCount++; }
+            }
+        }
+
+        // Target fotoğrafları
+        for (const item of (this.data.targets || [])) {
+            if (item.photo && !this.isPhotoRef(item.photo) && item.photo.startsWith('data:')) {
+                const id = await this.photoStore.savePhoto(item.photo, 'targets', item.id);
+                if (id) { item.photo = id; migratedCount++; }
+            }
+        }
+
+        if (migratedCount > 0) {
+            // Kaydet — artık referans ID'leri içerir, localStorage çok küçülecek
+            this.saveData('listings');
+            this.saveData('findings');
+            this.saveData('fsbo');
+            this.saveData('targets');
+            console.log(`PhotoStore: ${migratedCount} fotoğraf IndexedDB'ye taşındı`);
+        }
+
+        localStorage.setItem('rea_photos_migrated', 'true');
+    },
+
     init() {
         if (window.log) log("App.init() called.");
         try {
@@ -444,14 +665,15 @@ const app = {
         } catch (e) { if (window.log) log("Error attaching button: " + e); }
 
         console.log("App Initialized v3 - Kabasakal Check");
-        try { this.loadData(); } catch (e) { console.error("loadData failed", e); }
-        try { this.setupNavigation(); } catch (e) { console.error("setupNavigation failed", e); }
-        try { this.setupModals(); } catch (e) { console.error("setupModals failed", e); }
-        try { this.setupForms(); } catch (e) { console.error("setupForms failed", e); }
-        // this.setupFilters(); 
-        // this.setupGalleryButtons(); // Removed - not defined
-        // this.populateDistricts(); 
-        try { this.renderAll(); } catch (e) { console.error("renderAll failed", e); }
+
+        // IndexedDB'yi başlat, sonra verileri yükle
+        this.photoStore.init().then(() => {
+            try { this.loadData(); } catch (e) { console.error("loadData failed", e); }
+            try { this.setupNavigation(); } catch (e) { console.error("setupNavigation failed", e); }
+            try { this.setupModals(); } catch (e) { console.error("setupModals failed", e); }
+            try { this.setupForms(); } catch (e) { console.error("setupForms failed", e); }
+            try { this.renderAll(); } catch (e) { console.error("renderAll failed", e); }
+        });
     },
 
     setupForms() {
@@ -571,6 +793,9 @@ const app = {
         } catch (error) {
             console.error('Data loading error:', error);
         }
+
+        // Fotoğrafları IndexedDB'ye taşı (tek seferlik migrasyon)
+        try { await this.migratePhotosToIndexedDB(); } catch (e) { console.error('Photo migration error:', e); }
 
         this.updateStats();
     },
@@ -2304,6 +2529,11 @@ const app = {
 
     deleteFinding(id) {
         if (confirm('Bu bulumu silmek istediğinize emin misiniz?')) {
+            const item = this.data.findings.find(x => x.id === id);
+            if (item && item.photos && item.photos.length > 0) {
+                const photoIds = item.photos.filter(p => this.isPhotoRef(p));
+                if (photoIds.length > 0) this.photoStore.deletePhotos(photoIds);
+            }
             this.data.findings = this.data.findings.filter(x => x.id !== id);
             this.saveData('findings');
             this.renderFindings();
@@ -2868,6 +3098,11 @@ const app = {
 
     deleteListing(id) {
         if (confirm('Silinsin mi?')) {
+            const item = this.data.listings.find(l => l.id === id);
+            if (item && item.photos && item.photos.length > 0) {
+                const photoIds = item.photos.filter(p => this.isPhotoRef(p));
+                if (photoIds.length > 0) this.photoStore.deletePhotos(photoIds);
+            }
             this.data.listings = this.data.listings.filter(l => l.id !== id);
             this.saveData('listings');
             this.renderListings();
@@ -3295,28 +3530,17 @@ app.addListing = function (formData) {
         };
 
         if (files.length > 0) {
-            const processFile = (file) => {
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = function () {
-                        const img = new Image();
-                        img.src = reader.result;
-                        img.onload = function () {
-                            const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 800; // Reduced for storage optimization
-                            const scale = Math.min(1, MAX_WIDTH / img.width); // Don't upscale
-                            canvas.width = img.width * scale;
-                            canvas.height = img.height * scale;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.70)); // Quality 0.70
-                        }
-                    }
-                    reader.readAsDataURL(file);
-                });
+            const processAndStore = async (file) => {
+                const base64 = await app.compressPhoto(file);
+                const id = await app.photoStore.savePhoto(base64, targetKey, editId || Date.now());
+                if (id) {
+                    app._photoCache[id] = base64;
+                    return id;
+                }
+                return base64; // fallback: IndexedDB kullanılamıyorsa inline base64
             };
 
-            Promise.all(Array.from(files).map(processFile)).then(photos => {
+            Promise.all(Array.from(files).map(processAndStore)).then(photos => {
                 saveItem(photos);
             });
 
@@ -3578,10 +3802,13 @@ app.renderFsboList = function () {
 
         let galleryHtml = '';
         if (photoArray.length > 0) {
-            const photosInner = photoArray.map((src, idx) =>
-                `<img src="${src}" class="fsbo-photo-thumb" data-fsbo-id="${item.id}" data-photo-idx="${idx}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer; -webkit-tap-highlight-color:transparent;">`
-            ).join('');
-            galleryHtml = `<div class="fsbo-gallery" data-photos='${JSON.stringify(photoArray)}' style="display:flex; gap:5px; margin-bottom:10px; overflow-x:auto; padding-bottom:5px;">${photosInner}</div>`;
+            const photosInner = photoArray.map((src, idx) => {
+                if (app.isPhotoRef(src)) {
+                    return `<img data-photo-id="${src}" class="fsbo-photo-thumb" data-fsbo-id="${item.id}" data-photo-idx="${idx}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer; -webkit-tap-highlight-color:transparent; background:#f1f5f9;">`;
+                }
+                return `<img src="${src}" class="fsbo-photo-thumb" data-fsbo-id="${item.id}" data-photo-idx="${idx}" style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #e2e8f0; cursor:pointer; -webkit-tap-highlight-color:transparent;">`;
+            }).join('');
+            galleryHtml = `<div class="fsbo-gallery" style="display:flex; gap:5px; margin-bottom:10px; overflow-x:auto; padding-bottom:5px;">${photosInner}</div>`;
         }
 
         card.innerHTML = `
@@ -3677,6 +3904,10 @@ app.renderFsboList = function () {
     if (renewedContainer && sortedRenewed.length > 0) {
         sortedRenewed.forEach(item => renewedContainer.appendChild(createFsboCard(item)));
     }
+
+    // IndexedDB'den fotoğrafları çöz
+    this.resolveRenderedPhotos(container);
+    if (renewedContainer) this.resolveRenderedPhotos(renewedContainer);
 };
 
 app.renewFsboListing = function (id) {
@@ -3747,8 +3978,13 @@ app.openFsboDetail = function (id) {
     else if (item.photo) photoArray = [item.photo];
 
     const photoHtml = photoArray.length > 0
-        ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
-            ${photoArray.map(src => `<img src="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox('${src.replace(/'/g, "\\'")}')">`).join('')}
+        ? `<div id="fsbo-detail-photos" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+            ${photoArray.map(src => {
+                if (app.isPhotoRef(src)) {
+                    return `<img data-photo-id="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer; background:#f1f5f9;" onclick="app.openLightbox(this.src)">`;
+                }
+                return `<img src="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox(this.src)">`;
+            }).join('')}
            </div>`
         : '';
 
@@ -3854,6 +4090,9 @@ app.openFsboDetail = function (id) {
     `;
 
     this.modals.open('fsbo-detail');
+
+    // IndexedDB'den fotoğrafları çöz
+    this.resolveRenderedPhotos('#fsbo-detail-photos');
 };
 
 app.openFsboStatusModal = function (id) {
@@ -3972,6 +4211,14 @@ app.addFsbo = function (formData) {
 
 app.deleteFsbo = function (id) {
     if (confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
+        const item = this.data.fsbo.find(x => x.id === id);
+        if (item) {
+            // IndexedDB'den fotoğrafları sil
+            const photoIds = [];
+            if (item.photos) item.photos.forEach(p => { if (this.isPhotoRef(p)) photoIds.push(p); });
+            if (item.photo && this.isPhotoRef(item.photo)) photoIds.push(item.photo);
+            if (photoIds.length > 0) this.photoStore.deletePhotos(photoIds);
+        }
         this.data.fsbo = this.data.fsbo.filter(x => x.id !== id);
         this.saveData('fsbo');
         this.renderFsboList();
@@ -4015,29 +4262,38 @@ app.handleFsboFileSelect = function (input) {
     }
 };
 
-app.addFsboPhoto = function (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const base64 = e.target.result;
-        if (this.fsboPhotos.length >= 10) {
-            alert("En fazla 10 fotoğraf ekleyebilirsiniz.");
-            return;
-        }
-        this.fsboPhotos.push(base64);
-        this.renderFsboImagePreview();
-    };
-    reader.readAsDataURL(file);
+app.addFsboPhoto = async function (file) {
+    if (this.fsboPhotos.length >= 10) {
+        alert("En fazla 10 fotoğraf ekleyebilirsiniz.");
+        return;
+    }
+    const base64 = await this.compressPhoto(file);
+    const id = await this.photoStore.savePhoto(base64, 'fsbo', 'pending');
+    if (id) {
+        this._photoCache[id] = base64;
+        this.fsboPhotos.push(id);
+    } else {
+        this.fsboPhotos.push(base64); // fallback
+    }
+    this.renderFsboImagePreview();
 };
 
 app.renderFsboImagePreview = function () {
     const container = document.getElementById('fsbo-image-preview');
     if (!container) return;
-    container.innerHTML = this.fsboPhotos.map((src, index) => `
-        <div style="position: relative; width: 100%; height: 80px; border-radius: 4px; overflow: hidden; border: 1px solid #ddd; background:white;">
+    container.innerHTML = this.fsboPhotos.map((src, index) => {
+        if (this.isPhotoRef(src)) {
+            return `<div style="position: relative; width: 100%; height: 80px; border-radius: 4px; overflow: hidden; border: 1px solid #ddd; background:white;">
+                <img data-photo-id="${src}" style="width: 100%; height: 100%; object-fit: contain;">
+                <button onclick="event.stopPropagation(); app.removeFsboPhoto(${index})" style="position: absolute; top: 0; right: 0; background: rgba(220, 38, 38, 0.9); color: white; border: none; width: 22px; height: 22px; cursor: pointer; border-radius: 0 0 0 4px;">&times;</button>
+            </div>`;
+        }
+        return `<div style="position: relative; width: 100%; height: 80px; border-radius: 4px; overflow: hidden; border: 1px solid #ddd; background:white;">
             <img src="${src}" style="width: 100%; height: 100%; object-fit: contain;">
             <button onclick="event.stopPropagation(); app.removeFsboPhoto(${index})" style="position: absolute; top: 0; right: 0; background: rgba(220, 38, 38, 0.9); color: white; border: none; width: 22px; height: 22px; cursor: pointer; border-radius: 0 0 0 4px;">&times;</button>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+    this.resolveRenderedPhotos(container);
 };
 
 app.removeFsboPhoto = function (index) {
@@ -4486,11 +4742,40 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- DATA EXPORT / IMPORT ---
-app.exportData = function () {
+app.exportData = async function () {
+    // IndexedDB'den tüm fotoğrafları al
+    const photosMap = await this.photoStore.getAllPhotos();
+
+    // Data'nın derin kopyasını al ve ref ID'leri base64 ile değiştir (export için)
+    const dataCopy = JSON.parse(JSON.stringify(this.data));
+
+    // Fotoğrafları çöz (export dosyasında inline base64 olsun)
+    const resolvePhotos = (items, photoField = 'photos') => {
+        if (!items) return;
+        items.forEach(item => {
+            if (photoField === 'photos' && item.photos && Array.isArray(item.photos)) {
+                item.photos = item.photos.map(p => this.isPhotoRef(p) && photosMap[p] ? photosMap[p] : p);
+            }
+            if (photoField === 'photo' && item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
+                item.photo = photosMap[item.photo];
+            }
+        });
+    };
+
+    resolvePhotos(dataCopy.listings, 'photos');
+    resolvePhotos(dataCopy.findings, 'photos');
+    resolvePhotos(dataCopy.fsbo, 'photos');
+    dataCopy.fsbo?.forEach(item => {
+        if (item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
+            item.photo = photosMap[item.photo];
+        }
+    });
+    resolvePhotos(dataCopy.targets, 'photo');
+
     const exportObj = {
-        version: '1.0',
+        version: '2.0',
         exportDate: new Date().toISOString(),
-        data: this.data
+        data: dataCopy
     };
 
     const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
@@ -4556,19 +4841,23 @@ app.importData = function (file) {
                 this.saveData('findings');
                 this.saveData('appointments');
 
-                // Refresh all views
-                this.renderAll();
-                this.updateStats();
+                // Import edilen fotoğrafları IndexedDB'ye taşı
+                localStorage.removeItem('rea_photos_migrated');
+                this.migratePhotosToIndexedDB().then(() => {
+                    // Refresh all views
+                    this.renderAll();
+                    this.updateStats();
 
-                const addedListings = this.data.listings.length - currentListings.length;
-                const addedCustomers = this.data.customers.length - currentCustomers.length;
-                const addedFsbo = this.data.fsbo.length - currentFsbo.length;
+                    const addedListings = this.data.listings.length - currentListings.length;
+                    const addedCustomers = this.data.customers.length - currentCustomers.length;
+                    const addedFsbo = this.data.fsbo.length - currentFsbo.length;
 
-                alert(`Veriler başarıyla birleştirildi!\n\n` +
-                    `Eklenen:\n` +
-                    `+ ${addedListings} yeni ilan\n` +
-                    `+ ${addedCustomers} yeni müşteri\n` +
-                    `+ ${addedFsbo} yeni FSBO`);
+                    alert(`Veriler başarıyla birleştirildi!\n\n` +
+                        `Eklenen:\n` +
+                        `+ ${addedListings} yeni ilan\n` +
+                        `+ ${addedCustomers} yeni müşteri\n` +
+                        `+ ${addedFsbo} yeni FSBO`);
+                });
             }
         } catch (err) {
             alert('Dosya okunamadı: ' + err.message);
@@ -4602,11 +4891,28 @@ app.filterListingsByNeighborhood = function (name) {
 };
 
 // --- LIGHTBOX FOR FSBO PHOTOS ---
-app.openLightbox = function (imageSrc) {
+app.openLightbox = async function (imageSrc) {
     // Always remove old lightbox first
     app.closeLightbox();
 
     if (!imageSrc) return;
+
+    // Eğer photo ref ise IndexedDB'den çöz
+    let finalSrc = imageSrc;
+    if (this.isPhotoRef(imageSrc)) {
+        if (this._photoCache[imageSrc]) {
+            finalSrc = this._photoCache[imageSrc];
+        } else {
+            const data = await this.photoStore.getPhoto(imageSrc);
+            if (data) {
+                this._photoCache[imageSrc] = data;
+                finalSrc = data;
+            } else {
+                console.warn('Lightbox: Fotoğraf bulunamadı', imageSrc);
+                return;
+            }
+        }
+    }
 
     // Create fresh lightbox element
     const lb = document.createElement('div');
@@ -4621,7 +4927,7 @@ app.openLightbox = function (imageSrc) {
 
     // Image
     const img = document.createElement('img');
-    img.src = imageSrc;
+    img.src = finalSrc;
     img.style.cssText = 'max-width:90%;max-height:90%;object-fit:contain;';
 
     lb.appendChild(closeBtn);
@@ -4679,22 +4985,26 @@ app.handleTargetPhotoPaste = function (e) {
     }
 };
 
-app.setTargetPhotoFromFile = function (file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        this.targetPhoto = e.target.result;
-        const preview = document.getElementById('target-photo-preview');
-        if (preview) {
-            preview.innerHTML = `
-                <div style="position:relative; display:inline-block;">
-                    <img src="${this.targetPhoto}" style="width:100%; max-width:300px; height:140px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">
-                    <button onclick="event.stopPropagation(); app.removeTargetPhoto()" style="position:absolute; top:0; right:0; background:rgba(220,38,38,0.9); color:white; border:none; width:22px; height:22px; cursor:pointer; border-radius:0 0 0 4px;">&times;</button>
-                </div>`;
-        }
-        const pasteArea = document.getElementById('target-photo-paste-area');
-        if (pasteArea) pasteArea.style.display = 'none';
-    };
-    reader.readAsDataURL(file);
+app.setTargetPhotoFromFile = async function (file) {
+    const base64 = await this.compressPhoto(file);
+    const id = await this.photoStore.savePhoto(base64, 'targets', 'pending');
+    if (id) {
+        this._photoCache[id] = base64;
+        this.targetPhoto = id;
+    } else {
+        this.targetPhoto = base64; // fallback
+    }
+    const previewSrc = base64; // Preview her zaman base64 gösterir
+    const preview = document.getElementById('target-photo-preview');
+    if (preview) {
+        preview.innerHTML = `
+            <div style="position:relative; display:inline-block;">
+                <img src="${previewSrc}" style="width:100%; max-width:300px; height:140px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">
+                <button onclick="event.stopPropagation(); app.removeTargetPhoto()" style="position:absolute; top:0; right:0; background:rgba(220,38,38,0.9); color:white; border:none; width:22px; height:22px; cursor:pointer; border-radius:0 0 0 4px;">&times;</button>
+            </div>`;
+    }
+    const pasteArea = document.getElementById('target-photo-paste-area');
+    if (pasteArea) pasteArea.style.display = 'none';
 };
 
 app.removeTargetPhoto = function () {
@@ -4735,6 +5045,10 @@ app.addTarget = function (formData) {
 
 app.deleteTarget = function (id) {
     if (confirm('Bu hedef ilanı silmek istediğinize emin misiniz?')) {
+        const item = this.data.targets.find(x => x.id === id);
+        if (item && item.photo && this.isPhotoRef(item.photo)) {
+            this.photoStore.deletePhotos([item.photo]);
+        }
         this.data.targets = this.data.targets.filter(x => x.id !== id);
         this.saveData('targets');
         this.renderTargetListings();
@@ -4759,7 +5073,7 @@ app.renderTargetListings = function () {
             <div class="card-badges" style="position:absolute; top:10px; right:10px;">
                  <span class="badge" style="background:#dc2626; color:white;">HEDEF</span>
             </div>
-            ${item.photo ? `<img src="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer;" onclick="app.openLightbox('${item.photo.replace(/'/g, "\\'")}')" alt="Hedef ilan fotoğrafı">` : ''}
+            ${item.photo ? (app.isPhotoRef(item.photo) ? `<img data-photo-id="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer; background:#f1f5f9;" onclick="app.openLightbox(this.src)" alt="Hedef ilan fotoğrafı">` : `<img src="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer;" onclick="app.openLightbox(this.src)" alt="Hedef ilan fotoğrafı">`) : ''}
             <div class="card-content" style="padding: 15px;">
                 <h3 style="color:#991b1b; margin-bottom: 5px;">${item.title}</h3>
                 <div style="font-size: 13px; color: #7f1d1d; margin-bottom: 10px;">
@@ -4790,6 +5104,9 @@ app.renderTargetListings = function () {
             </div>
         </div>
     `).join('');
+
+    // IndexedDB'den fotoğrafları çöz
+    this.resolveRenderedPhotos(list);
 };
 
 app.openMapDirections = function (address) {
