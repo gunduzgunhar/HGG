@@ -23,17 +23,18 @@ const app = {
         storeName: 'photos',
 
         init() {
+            const self = app.photoStore;
             return new Promise((resolve) => {
                 try {
-                    const request = indexedDB.open(this.dbName, 1);
+                    const request = indexedDB.open(self.dbName, 1);
                     request.onupgradeneeded = (e) => {
                         const db = e.target.result;
-                        if (!db.objectStoreNames.contains(this.storeName)) {
-                            db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains(self.storeName)) {
+                            db.createObjectStore(self.storeName, { keyPath: 'id' });
                         }
                     };
                     request.onsuccess = (e) => {
-                        this.db = e.target.result;
+                        self.db = e.target.result;
                         console.log('PhotoStore: IndexedDB hazır');
                         resolve(true);
                     };
@@ -49,11 +50,12 @@ const app = {
         },
 
         savePhoto(base64, collection, parentId) {
+            const self = app.photoStore;
             return new Promise((resolve) => {
-                if (!this.db) { resolve(null); return; }
+                if (!self.db) { console.warn('PhotoStore: DB yok, fallback'); resolve(null); return; }
                 const id = 'photo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-                const tx = this.db.transaction(this.storeName, 'readwrite');
-                const store = tx.objectStore(this.storeName);
+                const tx = self.db.transaction(self.storeName, 'readwrite');
+                const store = tx.objectStore(self.storeName);
                 store.put({ id, data: base64, collection, parentId, created: Date.now() });
                 tx.oncomplete = () => resolve(id);
                 tx.onerror = () => { console.warn('PhotoStore: Kayıt hatası'); resolve(null); };
@@ -61,10 +63,11 @@ const app = {
         },
 
         getPhoto(id) {
+            const self = app.photoStore;
             return new Promise((resolve) => {
-                if (!this.db) { resolve(null); return; }
-                const tx = this.db.transaction(this.storeName, 'readonly');
-                const store = tx.objectStore(this.storeName);
+                if (!self.db) { resolve(null); return; }
+                const tx = self.db.transaction(self.storeName, 'readonly');
+                const store = tx.objectStore(self.storeName);
                 const request = store.get(id);
                 request.onsuccess = () => resolve(request.result ? request.result.data : null);
                 request.onerror = () => resolve(null);
@@ -72,10 +75,11 @@ const app = {
         },
 
         deletePhotos(ids) {
+            const self = app.photoStore;
             return new Promise((resolve) => {
-                if (!this.db || !ids || ids.length === 0) { resolve(); return; }
-                const tx = this.db.transaction(this.storeName, 'readwrite');
-                const store = tx.objectStore(this.storeName);
+                if (!self.db || !ids || ids.length === 0) { resolve(); return; }
+                const tx = self.db.transaction(self.storeName, 'readwrite');
+                const store = tx.objectStore(self.storeName);
                 ids.forEach(id => { if (id && typeof id === 'string' && id.startsWith('photo_')) store.delete(id); });
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => resolve();
@@ -83,10 +87,11 @@ const app = {
         },
 
         getAllPhotos() {
+            const self = app.photoStore;
             return new Promise((resolve) => {
-                if (!this.db) { resolve({}); return; }
-                const tx = this.db.transaction(this.storeName, 'readonly');
-                const store = tx.objectStore(this.storeName);
+                if (!self.db) { resolve({}); return; }
+                const tx = self.db.transaction(self.storeName, 'readonly');
+                const store = tx.objectStore(self.storeName);
                 const request = store.getAll();
                 request.onsuccess = () => {
                     const map = {};
