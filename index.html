@@ -63,8 +63,16 @@
 </head>
 
 <body>
+    <!-- Loading Ekranı (auth kontrol edilirken) -->
+    <div id="loading-screen" style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+        <div style="text-align:center; color:white;">
+            <i class="ph-fill ph-house-line" style="font-size:64px; opacity:0.9;"></i>
+            <div style="margin-top:20px; font-size:18px; opacity:0.8;">Yükleniyor...</div>
+        </div>
+    </div>
+
     <!-- Login Ekranı -->
-    <div id="login-screen" style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+    <div id="login-screen" style="display:none; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg, #1e293b 0%, #334155 100%);">
         <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 25px 50px rgba(0,0,0,0.25); width:100%; max-width:400px; margin:20px;">
             <div style="text-align:center; margin-bottom:30px;">
                 <i class="ph-fill ph-house-line" style="font-size:48px; color:#6366f1;"></i>

@@ -4850,6 +4850,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (user) {
                         // Kullanıcı giriş yapmış
                         app.currentUser = user;
+                        document.getElementById('loading-screen').style.display = 'none';
                         document.getElementById('login-screen').style.display = 'none';
                         document.getElementById('register-screen').style.display = 'none';
                         document.getElementById('main-app').style.display = 'block';
@@ -4887,6 +4888,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         // Kullanıcı giriş yapmamış
                         app.currentUser = null;
+                        document.getElementById('loading-screen').style.display = 'none';
                         document.getElementById('login-screen').style.display = 'flex';
                         document.getElementById('register-screen').style.display = 'none';
                         document.getElementById('main-app').style.display = 'none';
@@ -4895,6 +4897,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Firebase Auth yoksa direkt çalıştır
                 console.warn('Firebase Auth yüklenemedi, auth bypass');
+                document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-app').style.display = 'block';
                 app.init();
