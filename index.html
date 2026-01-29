@@ -41,6 +41,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script>
         // Firebase Configuration
         const firebaseConfig = {
@@ -54,6 +55,7 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         window.db = firebase.firestore();
+        window.auth = firebase.auth();
         console.log("Firebase initialized!");
     </script>
 
@@ -61,8 +63,78 @@
 </head>
 
 <body>
+    <!-- Login Ekranı -->
+    <div id="login-screen" style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 25px 50px rgba(0,0,0,0.25); width:100%; max-width:400px; margin:20px;">
+            <div style="text-align:center; margin-bottom:30px;">
+                <i class="ph-fill ph-house-line" style="font-size:48px; color:#6366f1;"></i>
+                <h1 style="margin:10px 0 5px; font-size:24px; color:#1e293b;">Emlak Asistanı</h1>
+                <p style="color:#64748b; font-size:14px;">Giriş yaparak devam edin</p>
+            </div>
+            <form id="login-form" onsubmit="return false;">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; font-size:13px; color:#475569; margin-bottom:6px;">Email</label>
+                    <input type="email" id="login-email" required
+                        style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; box-sizing:border-box;"
+                        placeholder="email@ornek.com">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; font-size:13px; color:#475569; margin-bottom:6px;">Şifre</label>
+                    <input type="password" id="login-password" required
+                        style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; box-sizing:border-box;"
+                        placeholder="••••••••">
+                </div>
+                <div id="login-error" style="display:none; background:#fef2f2; color:#991b1b; padding:10px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+                <button type="submit" onclick="app.login()"
+                    style="width:100%; padding:14px; background:#6366f1; color:white; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">
+                    Giriş Yap
+                </button>
+            </form>
+            <div style="text-align:center; margin-top:20px; padding-top:20px; border-top:1px solid #e2e8f0;">
+                <p style="color:#64748b; font-size:13px;">Hesabınız yok mu?
+                    <a href="#" onclick="app.showRegister()" style="color:#6366f1; text-decoration:none; font-weight:600;">Kayıt Ol</a>
+                </p>
+            </div>
+        </div>
+    </div>
 
-    <body>
+    <!-- Kayıt Ekranı -->
+    <div id="register-screen" style="display:none; align-items:center; justify-content:center; min-height:100vh; background:linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+        <div style="background:white; padding:40px; border-radius:16px; box-shadow:0 25px 50px rgba(0,0,0,0.25); width:100%; max-width:400px; margin:20px;">
+            <div style="text-align:center; margin-bottom:30px;">
+                <i class="ph-fill ph-user-plus" style="font-size:48px; color:#6366f1;"></i>
+                <h1 style="margin:10px 0 5px; font-size:24px; color:#1e293b;">Kayıt Ol</h1>
+                <p style="color:#64748b; font-size:14px;">Yeni hesap oluşturun</p>
+            </div>
+            <form id="register-form" onsubmit="return false;">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; font-size:13px; color:#475569; margin-bottom:6px;">Email</label>
+                    <input type="email" id="register-email" required
+                        style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; box-sizing:border-box;"
+                        placeholder="email@ornek.com">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; font-size:13px; color:#475569; margin-bottom:6px;">Şifre (min 6 karakter)</label>
+                    <input type="password" id="register-password" required minlength="6"
+                        style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:8px; font-size:14px; box-sizing:border-box;"
+                        placeholder="••••••••">
+                </div>
+                <div id="register-error" style="display:none; background:#fef2f2; color:#991b1b; padding:10px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+                <button type="submit" onclick="app.register()"
+                    style="width:100%; padding:14px; background:#6366f1; color:white; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer;">
+                    Kayıt Ol
+                </button>
+            </form>
+            <div style="text-align:center; margin-top:20px; padding-top:20px; border-top:1px solid #e2e8f0;">
+                <p style="color:#64748b; font-size:13px;">Zaten hesabınız var mı?
+                    <a href="#" onclick="app.showLogin()" style="color:#6366f1; text-decoration:none; font-weight:600;">Giriş Yap</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ana Uygulama (giriş yapılınca görünür) -->
+    <div id="main-app" style="display:none;">
         <div class="app-container">
             <!-- Sidebar -->
             <aside class="sidebar">
@@ -123,13 +195,15 @@
                         onchange="app.importData(this.files[0])">
                 </div>
 
-                <div class="user-profile">
+                <div class="user-profile" style="cursor:pointer;" onclick="app.logout()" title="Çıkış Yap">
                     <div class="avatar">
                         <i class="ph ph-user"></i>
                     </div>
                     <div class="user-info">
-                        <span class="name">Kullanıcı</span>
-                        <span class="role">Emlak Danışmanı</span>
+                        <span class="name" id="user-email-display">Kullanıcı</span>
+                        <span class="role" style="display:flex; align-items:center; gap:4px;">
+                            <i class="ph ph-sign-out"></i> Çıkış Yap
+                        </span>
                     </div>
                 </div>
             </aside>
@@ -1817,6 +1891,7 @@
         </div>
 
         <script src="app.js?v=force_reload_FIXED_MEMORY"></script>
-    </body>
+    </div><!-- /main-app -->
+</body>
 
 </html>

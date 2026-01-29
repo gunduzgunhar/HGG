@@ -15,6 +15,111 @@ const app = {
     },
     currentCustomerRegions: [],
     currentEditRegions: [],
+    currentUser: null,
+
+    // --- Firebase Authentication ---
+    checkAuth() {
+        if (!window.auth) {
+            console.warn('Firebase Auth yüklenemedi');
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            return;
+        }
+
+        window.auth.onAuthStateChanged((user) => {
+            if (user) {
+                // Kullanıcı giriş yapmış
+                this.currentUser = user;
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('register-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+
+                // Email'i göster
+                const emailDisplay = document.getElementById('user-email-display');
+                if (emailDisplay) {
+                    emailDisplay.textContent = user.email.split('@')[0];
+                }
+
+                console.log('Giriş yapıldı:', user.email);
+            } else {
+                // Kullanıcı giriş yapmamış
+                this.currentUser = null;
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('register-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'none';
+            }
+        });
+    },
+
+    async login() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const errorDiv = document.getElementById('login-error');
+
+        errorDiv.style.display = 'none';
+
+        try {
+            await window.auth.signInWithEmailAndPassword(email, password);
+        } catch (error) {
+            console.error('Login error:', error);
+            errorDiv.style.display = 'block';
+            if (error.code === 'auth/user-not-found') {
+                errorDiv.textContent = 'Bu email ile kayıtlı kullanıcı bulunamadı.';
+            } else if (error.code === 'auth/wrong-password') {
+                errorDiv.textContent = 'Şifre hatalı.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorDiv.textContent = 'Geçersiz email adresi.';
+            } else if (error.code === 'auth/invalid-credential') {
+                errorDiv.textContent = 'Email veya şifre hatalı.';
+            } else {
+                errorDiv.textContent = 'Giriş yapılamadı: ' + error.message;
+            }
+        }
+    },
+
+    async register() {
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const errorDiv = document.getElementById('register-error');
+
+        errorDiv.style.display = 'none';
+
+        try {
+            await window.auth.createUserWithEmailAndPassword(email, password);
+        } catch (error) {
+            console.error('Register error:', error);
+            errorDiv.style.display = 'block';
+            if (error.code === 'auth/email-already-in-use') {
+                errorDiv.textContent = 'Bu email zaten kayıtlı.';
+            } else if (error.code === 'auth/weak-password') {
+                errorDiv.textContent = 'Şifre en az 6 karakter olmalı.';
+            } else if (error.code === 'auth/invalid-email') {
+                errorDiv.textContent = 'Geçersiz email adresi.';
+            } else {
+                errorDiv.textContent = 'Kayıt olunamadı: ' + error.message;
+            }
+        }
+    },
+
+    async logout() {
+        if (confirm('Çıkış yapmak istediğinize emin misiniz?')) {
+            try {
+                await window.auth.signOut();
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+    },
+
+    showLogin() {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('register-screen').style.display = 'none';
+    },
+
+    showRegister() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('register-screen').style.display = 'flex';
+    },
 
     // --- IndexedDB Photo Storage ---
     photoStore: {
@@ -4718,23 +4823,61 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.log) window.log("App Init Starting...");
         if (typeof app !== 'undefined') {
             window.app = app;
-            app.init();
 
-            // One-time Migration: Huzur -> Huzurevleri
-            if (!localStorage.getItem('migration_huzur_done')) {
-                let updated = 0;
-                app.data.listings.forEach(item => {
-                    if (item.location && item.location.includes('Huzur') && !item.location.includes('Huzurevleri')) {
-                        item.location = item.location.replace('Huzur', 'Huzurevleri');
-                        updated++;
+            // Auth kontrolü - giriş yapılınca init() çağrılacak
+            if (window.auth) {
+                window.auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        // Kullanıcı giriş yapmış
+                        app.currentUser = user;
+                        document.getElementById('login-screen').style.display = 'none';
+                        document.getElementById('register-screen').style.display = 'none';
+                        document.getElementById('main-app').style.display = 'block';
+
+                        // Email'i göster
+                        const emailDisplay = document.getElementById('user-email-display');
+                        if (emailDisplay) {
+                            emailDisplay.textContent = user.email.split('@')[0];
+                        }
+
+                        // Init (sadece bir kez)
+                        if (!app._initialized) {
+                            app._initialized = true;
+                            app.init();
+
+                            // One-time Migration: Huzur -> Huzurevleri
+                            if (!localStorage.getItem('migration_huzur_done')) {
+                                let updated = 0;
+                                app.data.listings.forEach(item => {
+                                    if (item.location && item.location.includes('Huzur') && !item.location.includes('Huzurevleri')) {
+                                        item.location = item.location.replace('Huzur', 'Huzurevleri');
+                                        updated++;
+                                    }
+                                });
+                                if (updated > 0) {
+                                    app.saveData('listings');
+                                    app.renderListings();
+                                    console.log(`Migration: ${updated} ilan güncellendi (Huzur -> Huzurevleri)`);
+                                }
+                                localStorage.setItem('migration_huzur_done', 'true');
+                            }
+                        }
+
+                        console.log('Giriş yapıldı:', user.email);
+                    } else {
+                        // Kullanıcı giriş yapmamış
+                        app.currentUser = null;
+                        document.getElementById('login-screen').style.display = 'flex';
+                        document.getElementById('register-screen').style.display = 'none';
+                        document.getElementById('main-app').style.display = 'none';
                     }
                 });
-                if (updated > 0) {
-                    app.saveData('listings');
-                    app.renderListings();
-                    console.log(`Migration: ${updated} ilan güncellendi (Huzur -> Huzurevleri)`);
-                }
-                localStorage.setItem('migration_huzur_done', 'true');
+            } else {
+                // Firebase Auth yoksa direkt çalıştır
+                console.warn('Firebase Auth yüklenemedi, auth bypass');
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                app.init();
             }
         } else {
             console.error("FATAL: 'app' constant is undefined at DOMContentLoaded");
