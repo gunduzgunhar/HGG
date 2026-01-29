@@ -1043,6 +1043,24 @@
                             <label>İlan Linki (Varsa)</label>
                             <input type="url" name="link" placeholder="https://...">
                         </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İlçe</label>
+                                <select name="district" id="target-district" onchange="app.onTargetDistrictChange()">
+                                    <option value="">Seçiniz</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mahalle</label>
+                                <select name="neighborhood" id="target-neighborhood">
+                                    <option value="">Önce İlçe Seçin</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label>Fiyat</label>
                             <input type="text" name="price" oninput="app.formatPriceInput(this)"

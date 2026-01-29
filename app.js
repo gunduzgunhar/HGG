@@ -5022,11 +5022,36 @@ app.removeTargetPhoto = function () {
     if (pasteArea) pasteArea.style.display = '';
 };
 
+app.onTargetDistrictChange = function () {
+    const districtSelect = document.getElementById('target-district');
+    const district = districtSelect.value;
+    const neighborhoodSelect = document.getElementById('target-neighborhood');
+
+    neighborhoodSelect.innerHTML = '<option value="">Seçiniz</option>';
+
+    if (district && this.adanaLocations[district]) {
+        const neighborhoods = Object.keys(this.adanaLocations[district].neighborhoods);
+        neighborhoods.sort((a, b) => a.localeCompare(b, 'tr'));
+
+        neighborhoods.forEach(n => {
+            const option = document.createElement('option');
+            option.value = n;
+            option.textContent = n;
+            neighborhoodSelect.appendChild(option);
+        });
+    }
+};
+
 app.addTarget = function (formData) {
+    const district = formData.get('district') || '';
+    const neighborhood = formData.get('neighborhood') || '';
+
     const newItem = {
         id: 'target_' + Date.now(),
         title: formData.get('title'),
         link: formData.get('link'),
+        district: district,
+        neighborhood: neighborhood,
         price: formData.get('price'),
         address: formData.get('address'),
         agent_note: formData.get('agent_note'),
@@ -5081,6 +5106,7 @@ app.renderTargetListings = function () {
             ${item.photo ? (app.isPhotoRef(item.photo) ? `<img data-photo-id="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer; background:#f1f5f9;" onclick="app.openLightbox(this.src)" alt="Hedef ilan fotoğrafı">` : `<img src="${item.photo}" style="width:100%; height:140px; object-fit:cover; border-radius:8px 8px 0 0; cursor:pointer;" onclick="app.openLightbox(this.src)" alt="Hedef ilan fotoğrafı">`) : ''}
             <div class="card-content" style="padding: 15px;">
                 <h3 style="color:#991b1b; margin-bottom: 5px;">${item.title}</h3>
+                ${item.district || item.neighborhood ? `<div style="font-size: 12px; color: #64748b; margin-bottom: 8px;"><i class="ph ph-map-pin"></i> ${item.neighborhood || ''}${item.neighborhood && item.district ? ', ' : ''}${item.district || ''}</div>` : ''}
                 <div style="font-size: 13px; color: #7f1d1d; margin-bottom: 10px;">
                     ${item.agent_note || ''}
                 </div>
