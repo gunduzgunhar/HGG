@@ -17,6 +17,12 @@ const app = {
     currentEditRegions: [],
     currentUser: null,
 
+    // İzinli kullanıcılar (sadece bu email'ler giriş yapabilir)
+    allowedUsers: [
+        'hkn.gnhr1@gmail.com',
+        'aleynadincgorur1@gmail.com'
+    ],
+
     // --- Firebase Authentication ---
     checkAuth() {
         if (!window.auth) {
@@ -52,11 +58,18 @@ const app = {
     },
 
     async login() {
-        const email = document.getElementById('login-email').value;
+        const email = document.getElementById('login-email').value.trim().toLowerCase();
         const password = document.getElementById('login-password').value;
         const errorDiv = document.getElementById('login-error');
 
         errorDiv.style.display = 'none';
+
+        // Whitelist kontrolü
+        if (!this.allowedUsers.includes(email)) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Bu email ile giriş izniniz bulunmuyor.';
+            return;
+        }
 
         try {
             await window.auth.signInWithEmailAndPassword(email, password);
@@ -78,11 +91,18 @@ const app = {
     },
 
     async register() {
-        const email = document.getElementById('register-email').value;
+        const email = document.getElementById('register-email').value.trim().toLowerCase();
         const password = document.getElementById('register-password').value;
         const errorDiv = document.getElementById('register-error');
 
         errorDiv.style.display = 'none';
+
+        // Whitelist kontrolü
+        if (!this.allowedUsers.includes(email)) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Bu email için kayıt izni bulunmuyor.';
+            return;
+        }
 
         try {
             await window.auth.createUserWithEmailAndPassword(email, password);
