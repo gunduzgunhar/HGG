@@ -2254,10 +2254,35 @@ const app = {
                     }
                 }
 
-                // 6. Damage & Site (Listings typically)
-                // We'll skip complex checks for FSBO as data is often sparse
+                // 6. Damage Match
+                let damageMatch = true;
+                if (!isFsbo && customer.damage_pref && customer.damage_pref !== "") {
+                    const listingDamage = (item.damage || "").toLocaleLowerCase('tr-TR');
+                    const customerDamage = customer.damage_pref.toLocaleLowerCase('tr-TR');
 
-                return regionMatch && roomMatch && kitchenMatch && budgetMatch && buildingAgeMatch;
+                    if (customerDamage.includes('hasarsız')) {
+                        // Müşteri hasarsız istiyor - sadece hasarsız olanlar
+                        damageMatch = listingDamage.includes('hasarsız') || listingDamage === '';
+                    } else if (customerDamage.includes('az hasarlı')) {
+                        // Müşteri az hasarlı kabul ediyor - hasarsız veya az hasarlı
+                        damageMatch = listingDamage.includes('hasarsız') || listingDamage.includes('az') || listingDamage === '';
+                    }
+                }
+
+                // 7. Site Preference Match
+                let siteMatch = true;
+                if (!isFsbo && customer.site_pref && customer.site_pref !== "") {
+                    const listingSite = (item.site_features || "").toLocaleLowerCase('tr-TR');
+                    const customerSite = customer.site_pref.toLocaleLowerCase('tr-TR');
+
+                    if (customerSite.includes('site içi')) {
+                        siteMatch = listingSite !== '' && !listingSite.includes('müstakil');
+                    } else if (customerSite.includes('müstakil')) {
+                        siteMatch = listingSite === '' || listingSite.includes('müstakil') || listingSite.includes('yok');
+                    }
+                }
+
+                return regionMatch && roomMatch && kitchenMatch && budgetMatch && buildingAgeMatch && damageMatch && siteMatch;
             };
 
             // GET MATCHES
