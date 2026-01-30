@@ -881,6 +881,7 @@ const app = {
             try { this.setupNavigation(); } catch (e) { console.error("setupNavigation failed", e); }
             try { this.setupModals(); } catch (e) { console.error("setupModals failed", e); }
             try { this.setupForms(); } catch (e) { console.error("setupForms failed", e); }
+            try { this.setupFilters(); } catch (e) { console.error("setupFilters failed", e); }
             try { this.renderAll(); } catch (e) { console.error("renderAll failed", e); }
         });
     },
@@ -2534,7 +2535,7 @@ const app = {
 
         // Get Filter Values
         const searchInput = document.querySelector('.search-input');
-        const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+        const searchTerm = searchInput ? searchInput.value.toLocaleLowerCase('tr-TR') : '';
         const districtFilter = document.getElementById('list-filter-district') ? document.getElementById('list-filter-district').value : '';
         const neighborhoodFilter = document.getElementById('list-filter-neighborhood') ? document.getElementById('list-filter-neighborhood').value : '';
         const roomFilter = document.getElementById('list-filter-rooms') ? document.getElementById('list-filter-rooms').value : '';
