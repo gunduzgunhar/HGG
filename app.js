@@ -2275,15 +2275,19 @@ const app = {
                 // 6. Damage Match
                 let damageMatch = true;
                 if (!isFsbo && customer.damage_pref && customer.damage_pref !== "") {
-                    const listingDamage = (item.damage || "").toLocaleLowerCase('tr-TR');
+                    const listingDamage = (item.damage || "").toLocaleLowerCase('tr-TR').trim();
                     const customerDamage = customer.damage_pref.toLocaleLowerCase('tr-TR');
 
                     if (customerDamage.includes('hasarsız')) {
-                        // Müşteri hasarsız istiyor - sadece hasarsız olanlar
-                        damageMatch = listingDamage.includes('hasarsız') || listingDamage === '';
+                        // Müşteri hasarsız istiyor - SADECE tam hasarsız olanlar
+                        // "Hasarsızdan Az Hasarlı" gibi karışık değerler geçmemeli
+                        damageMatch = listingDamage === 'hasarsız' || listingDamage === '';
                     } else if (customerDamage.includes('az hasarlı')) {
-                        // Müşteri az hasarlı kabul ediyor - hasarsız veya az hasarlı
-                        damageMatch = listingDamage.includes('hasarsız') || listingDamage.includes('az') || listingDamage === '';
+                        // Müşteri az hasarlı kabul ediyor - hasarsız veya az hasarlı (karışık da olabilir)
+                        damageMatch = listingDamage === 'hasarsız' ||
+                                      listingDamage === 'az hasarlı' ||
+                                      listingDamage.includes('hasarsız') ||
+                                      listingDamage === '';
                     }
                 }
 
