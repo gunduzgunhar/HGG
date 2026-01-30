@@ -1751,6 +1751,22 @@ const app = {
                                 <option value="Kapalı Mutfak" ${customer.kitchen_pref === 'Kapalı Mutfak' ? 'selected' : ''}>Kapalı Mutfak</option>
                             </select>
                         </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Hasar Durumu</label>
+                            <select name="damage_pref" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="">Farketmez</option>
+                                <option value="Hasarsız" ${customer.damage_pref === 'Hasarsız' ? 'selected' : ''}>Hasarsız</option>
+                                <option value="Az Hasarlı" ${customer.damage_pref === 'Az Hasarlı' ? 'selected' : ''}>Az Hasarlı Olabilir</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Site Tercihi</label>
+                            <select name="site_pref" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="">Farketmez</option>
+                                <option value="Site İçi" ${customer.site_pref === 'Site İçi' ? 'selected' : ''}>Site İçi Olsun</option>
+                                <option value="Müstakil" ${customer.site_pref === 'Müstakil' ? 'selected' : ''}>Müstakil Olsun</option>
+                            </select>
+                        </div>
                         <div style="display: flex; gap: 10px; margin-top: 10px;">
                             <button type="button" onclick="document.getElementById('customer-edit-popup').remove()" style="flex: 1; padding: 12px; border: 1px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer;">İptal</button>
                             <button type="submit" style="flex: 1; padding: 12px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Kaydet</button>
@@ -1772,6 +1788,8 @@ const app = {
             customer.room_pref = formData.get('room_pref');
             customer.max_building_age = formData.get('max_building_age');
             customer.kitchen_pref = formData.get('kitchen_pref');
+            customer.damage_pref = formData.get('damage_pref');
+            customer.site_pref = formData.get('site_pref');
 
             this.saveData('customers');
             this.renderCustomers();
