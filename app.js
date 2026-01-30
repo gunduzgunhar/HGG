@@ -577,13 +577,29 @@ const app = {
         estimatedValue *= siteMultiplier;
 
         // Damage Status - Critical
+        // Check specific categories first (longer strings before shorter ones)
         const damage = listing.damage || '';
         let damageMultiplier = 1.0;
         let damageLabel = '';
 
-        if (damage.includes('Hasarsız')) {
+        if (damage.includes('Hasarsızdan Az Hasarlı')) {
+            damageMultiplier = 0.82; // -18%
+            damageLabel = 'Hasarsızdan Az Hasarlı -%18';
+        } else if (damage.includes('Ortadan Hasarsız')) {
+            damageMultiplier = 0.80; // -20%
+            damageLabel = 'Ortadan Hasarsız -%20';
+        } else if (damage.includes('Ortadan Az Hasarlı')) {
+            damageMultiplier = 0.75; // -25%
+            damageLabel = 'Ortadan Az Hasarlı -%25';
+        } else if (damage.includes('Azdan Hasarsız')) {
+            damageMultiplier = 0.95; // -5%
+            damageLabel = 'Azdan Hasarsız -%5';
+        } else if (damage.includes('Azdan Az Hasarlı')) {
+            damageMultiplier = 0.82; // -18%
+            damageLabel = 'Azdan Az Hasarlı -%18';
+        } else if (damage.includes('Hasarsız')) {
             // No adjustment - this is the expected default
-        } else if (damage.includes('Az')) {
+        } else if (damage.includes('Az Hasarlı')) {
             damageMultiplier = 0.82; // -18%
             damageLabel = 'Az Hasarlı -%18';
         } else if (damage.includes('Orta')) {
