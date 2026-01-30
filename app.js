@@ -402,6 +402,7 @@ const app = {
         let soldDataAge = null;
         let soldDataSite = null;
         let soldDataKitchen = null;
+        let soldDataDeed = null;
 
         const soldListings = this.data.listings.filter(l =>
             l.status === 'sold' &&
@@ -429,9 +430,11 @@ const app = {
             const soldAges = soldListings.map(s => s.building_age).filter(a => a);
             const soldSites = soldListings.map(s => s.site_features).filter(s => s);
             const soldKitchens = soldListings.map(s => s.kitchen).filter(k => k);
+            const soldDeeds = soldListings.map(s => s.deed_status).filter(d => d);
             if (soldAges.length > 0) soldDataAge = soldAges[0]; // Most recent sold
             if (soldSites.length > 0) soldDataSite = soldSites[0];
             if (soldKitchens.length > 0) soldDataKitchen = soldKitchens[0];
+            if (soldDeeds.length > 0) soldDataDeed = soldDeeds[0];
         }
 
         // Start with base value
@@ -443,34 +446,60 @@ const app = {
         // SMART: Skip adjustments if sold data has same characteristics (avoid double-counting)
 
         // Building Age - MOST IMPORTANT FACTOR
+        // Helper function to get age multiplier
+        const getAgeMultiplier = (ageVal) => {
+            if (ageVal === '0' || ageVal === '1' || ageVal === '2' || ageVal === '3' || ageVal === '4' || ageVal === '5') {
+                return 1.20; // +20%
+            } else if (ageVal === '6-10') {
+                return 1.10; // +10%
+            } else if (ageVal === '11-15') {
+                return 1.0; // Baseline
+            } else if (ageVal === '16-20') {
+                return 0.90; // -10%
+            } else if (ageVal === '21-25') {
+                return 0.78; // -22%
+            } else if (ageVal === '26-30') {
+                return 0.65; // -35%
+            } else if (ageVal === '30+') {
+                return 0.60; // -40%
+            }
+            return 1.0; // Default baseline
+        };
+
         const age = listing.building_age || '';
         let ageMultiplier = 1.0;
         let ageLabel = '';
 
-        // Only apply age adjustment if different from sold data OR no sold data
         const sameAgeAsSold = usingSoldData && soldDataAge && age === soldDataAge;
 
         if (!sameAgeAsSold) {
-            if (age === '0' || age === '1' || age === '2' || age === '3' || age === '4' || age === '5') {
-                ageMultiplier = 1.20; // +20%
-                ageLabel = 'Yeni Bina (0-5 yaş) +%20';
-            } else if (age === '6-10') {
-                ageMultiplier = 1.10; // +10%
-                ageLabel = 'Genç Bina (6-10 yaş) +%10';
-            } else if (age === '11-15') {
-                ageMultiplier = 1.0; // Baseline
-            } else if (age === '16-20') {
-                ageMultiplier = 0.90; // -10%
-                ageLabel = 'Orta Yaşlı Bina (16-20 yaş) -%10';
-            } else if (age === '21-25') {
-                ageMultiplier = 0.78; // -22%
-                ageLabel = 'Eski Bina (21-25 yaş) -%22';
-            } else if (age === '26-30') {
-                ageMultiplier = 0.65; // -35%
-                ageLabel = 'Çok Eski Bina (26-30 yaş) -%35';
-            } else if (age === '30+') {
-                ageMultiplier = 0.60; // -40%
-                ageLabel = 'Yaşlı Bina (30+ yaş) -%40';
+            const listingAgeMult = getAgeMultiplier(age);
+
+            if (usingSoldData && soldDataAge) {
+                // RELATIVE adjustment: compare to sold data's age
+                const soldAgeMult = getAgeMultiplier(soldDataAge);
+                ageMultiplier = listingAgeMult / soldAgeMult;
+
+                const percentChange = Math.round((ageMultiplier - 1) * 100);
+                if (percentChange !== 0) {
+                    ageLabel = `Yaş Farkı (${soldDataAge} → ${age}) ${percentChange > 0 ? '+' : ''}%${percentChange}`;
+                }
+            } else {
+                // ABSOLUTE adjustment: no sold data, use absolute multiplier
+                ageMultiplier = listingAgeMult;
+                if (age === '0' || age === '1' || age === '2' || age === '3' || age === '4' || age === '5') {
+                    ageLabel = 'Yeni Bina (0-5 yaş) +%20';
+                } else if (age === '6-10') {
+                    ageLabel = 'Genç Bina (6-10 yaş) +%10';
+                } else if (age === '16-20') {
+                    ageLabel = 'Orta Yaşlı Bina (16-20 yaş) -%10';
+                } else if (age === '21-25') {
+                    ageLabel = 'Eski Bina (21-25 yaş) -%22';
+                } else if (age === '26-30') {
+                    ageLabel = 'Çok Eski Bina (26-30 yaş) -%35';
+                } else if (age === '30+') {
+                    ageLabel = 'Yaşlı Bina (30+ yaş) -%40';
+                }
             }
         }
 
@@ -502,20 +531,42 @@ const app = {
         estimatedValue *= floorMultiplier;
 
         // Site Features - Huge impact
+        // Helper function to get site multiplier
+        const getSiteMultiplier = (siteVal) => {
+            if (siteVal && siteVal.includes('Sosyal Donatılı')) {
+                return 1.20; // +20%
+            } else if (siteVal && siteVal.includes('Kısmi')) {
+                return 1.08; // +8%
+            }
+            return 1.0; // No site or basic
+        };
+
         const siteFeatures = listing.site_features || '';
         let siteMultiplier = 1.0;
         let siteLabel = '';
 
-        // Only apply site adjustment if different from sold data OR no sold data
         const sameSiteAsSold = usingSoldData && soldDataSite && siteFeatures === soldDataSite;
 
         if (!sameSiteAsSold) {
-            if (siteFeatures.includes('Sosyal Donatılı')) {
-                siteMultiplier = 1.20; // +20%
-                siteLabel = 'Sosyal Donatılı Site +%20';
-            } else if (siteFeatures.includes('Kısmi')) {
-                siteMultiplier = 1.08; // +8%
-                siteLabel = 'Kısmi Sosyal Donatı +%8';
+            const listingSiteMult = getSiteMultiplier(siteFeatures);
+
+            if (usingSoldData && soldDataSite) {
+                // RELATIVE adjustment: compare to sold data's site
+                const soldSiteMult = getSiteMultiplier(soldDataSite);
+                siteMultiplier = listingSiteMult / soldSiteMult;
+
+                const percentChange = Math.round((siteMultiplier - 1) * 100);
+                if (percentChange !== 0) {
+                    siteLabel = `Site Farkı (satılana göre) ${percentChange > 0 ? '+' : ''}%${percentChange}`;
+                }
+            } else {
+                // ABSOLUTE adjustment: no sold data
+                siteMultiplier = listingSiteMult;
+                if (siteFeatures.includes('Sosyal Donatılı')) {
+                    siteLabel = 'Sosyal Donatılı Site +%20';
+                } else if (siteFeatures.includes('Kısmi')) {
+                    siteLabel = 'Kısmi Sosyal Donatı +%8';
+                }
             }
         }
 
@@ -549,14 +600,31 @@ const app = {
         }
         estimatedValue *= damageMultiplier;
 
-        // Deed Status (Tapu Durumu) Adjustment
+        // Deed Status (Tapu Durumu) Adjustment - RELATIVE when using sold data
         const deedStatus = listing.deed_status || '';
         let deedMultiplier = 1.0;
         let deedLabel = '';
 
-        if (deedStatus.includes('İrtifak') || deedStatus.includes('irtifak')) {
-            deedMultiplier = 0.93; // -7%
-            deedLabel = 'Kat İrtifaklı -%7';
+        const soldHadIrtifak = usingSoldData && soldDataDeed &&
+            (soldDataDeed.includes('İrtifak') || soldDataDeed.includes('irtifak'));
+        const listingHasIrtifak = deedStatus.includes('İrtifak') || deedStatus.includes('irtifak');
+
+        if (usingSoldData && soldDataDeed) {
+            // RELATIVE: Compare deed status
+            if (listingHasIrtifak && !soldHadIrtifak) {
+                deedMultiplier = 0.93; // -7% (listing worse than sold)
+                deedLabel = 'Kat İrtifaklı (satılana göre) -%7';
+            } else if (!listingHasIrtifak && soldHadIrtifak) {
+                deedMultiplier = 1.07; // +7% (listing better than sold)
+                deedLabel = 'Kat Mülkiyetli (satılana göre) +%7';
+            }
+            // If both same, no adjustment needed
+        } else {
+            // ABSOLUTE: No sold data
+            if (listingHasIrtifak) {
+                deedMultiplier = 0.93; // -7%
+                deedLabel = 'Kat İrtifaklı -%7';
+            }
         }
 
         if (deedLabel) {
@@ -566,7 +634,7 @@ const app = {
         estimatedValue *= deedMultiplier;
 
         // Kitchen Type Adjustment - Closed kitchen is preferred
-        // Only apply if sold data didn't have closed kitchen (avoid double-counting)
+        // RELATIVE adjustment when using sold data
         const kitchen = listing.kitchen || '';
         let kitchenMultiplier = 1.0;
         let kitchenLabel = '';
@@ -575,10 +643,21 @@ const app = {
             (soldDataKitchen.includes('Kapalı') || soldDataKitchen.includes('kapalı'));
         const listingHasClosedKitchen = kitchen.includes('Kapalı') || kitchen.includes('kapalı');
 
-        // Only add +7% if listing has closed kitchen BUT sold data didn't
-        if (listingHasClosedKitchen && !soldHadClosedKitchen) {
-            kitchenMultiplier = 1.07; // +7%
-            kitchenLabel = 'Kapalı Mutfak +%7';
+        if (usingSoldData && soldDataKitchen) {
+            // RELATIVE: Compare kitchen types
+            if (listingHasClosedKitchen && !soldHadClosedKitchen) {
+                kitchenMultiplier = 1.07; // +7% (listing better than sold)
+                kitchenLabel = 'Kapalı Mutfak (satılana göre) +%7';
+            } else if (!listingHasClosedKitchen && soldHadClosedKitchen) {
+                kitchenMultiplier = 0.93; // -7% (listing worse than sold)
+                kitchenLabel = 'Açık Mutfak (satılana göre) -%7';
+            }
+        } else {
+            // ABSOLUTE: No sold data, just apply premium for closed kitchen
+            if (listingHasClosedKitchen) {
+                kitchenMultiplier = 1.07; // +7%
+                kitchenLabel = 'Kapalı Mutfak +%7';
+            }
         }
 
         if (kitchenLabel) {
