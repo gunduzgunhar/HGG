@@ -2223,6 +2223,9 @@ const app = {
                         else actualAge = parseInt(itemAgeStr) || 999;
 
                         buildingAgeMatch = actualAge <= maxAge;
+                    } else {
+                        // Yaş verisi yoksa müşteri yaş tercihi varsa eşleşme
+                        buildingAgeMatch = false;
                     }
                 }
 
