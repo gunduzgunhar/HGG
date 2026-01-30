@@ -2905,10 +2905,9 @@ const app = {
             if (item.status === 'sold' || item.status === 'cancelled') return false;
 
             // Budget (allow +15%)
-            // Fix parsing for dotted prices like "4.500.000"
             const rawPrice = String(item.price || '0').replace(/\./g, '');
             const price = parseInt(rawPrice) || 0;
-            if (price > budget * 1.15) return false;
+            if (budget > 0 && price > budget * 1.15) return false;
 
             // Rooms
             if (roomPrefs.length > 0 && item.rooms && !roomPrefs.some(pref => item.rooms.includes(pref))) return false;
@@ -2923,6 +2922,51 @@ const app = {
                 });
                 if (!matchRegion) return false;
             }
+
+            // Building Age Check
+            if (customer.max_building_age && customer.max_building_age !== "") {
+                const maxAge = parseInt(customer.max_building_age);
+                const itemAgeStr = item.building_age || "";
+                if (itemAgeStr) {
+                    let actualAge = 999;
+                    if (itemAgeStr.includes("-")) actualAge = parseInt(itemAgeStr.split("-")[1]) || 999;
+                    else if (itemAgeStr.includes("+")) actualAge = 31;
+                    else actualAge = parseInt(itemAgeStr) || 999;
+                    if (actualAge > maxAge) return false;
+                } else {
+                    return false; // Yaş verisi yoksa eşleşme yok
+                }
+            }
+
+            // Damage Check
+            if (customer.damage_pref && customer.damage_pref !== "") {
+                const listingDamage = (item.damage || "").toLowerCase().trim();
+                const customerDamage = customer.damage_pref.toLowerCase();
+                if (customerDamage.includes('hasarsız')) {
+                    if (listingDamage !== 'hasarsız' && listingDamage !== '') return false;
+                } else if (customerDamage.includes('az hasarlı')) {
+                    if (listingDamage !== 'hasarsız' && listingDamage !== 'az hasarlı' && listingDamage !== '') return false;
+                }
+            }
+
+            // Kitchen Check
+            if (customer.kitchen_pref && customer.kitchen_pref !== "") {
+                const listingKitchen = (item.kitchen || "").toLowerCase();
+                const customerKitchen = customer.kitchen_pref.toLowerCase();
+                if (!listingKitchen.includes(customerKitchen) && !customerKitchen.includes(listingKitchen)) return false;
+            }
+
+            // Site Check
+            if (customer.site_pref && customer.site_pref !== "") {
+                const listingSite = (item.site_features || "").toLowerCase();
+                const customerSite = customer.site_pref.toLowerCase();
+                if (customerSite.includes('site içi')) {
+                    if (listingSite === '' || listingSite.includes('müstakil')) return false;
+                } else if (customerSite.includes('müstakil')) {
+                    if (listingSite !== '' && !listingSite.includes('müstakil') && !listingSite.includes('yok')) return false;
+                }
+            }
+
             return true;
         };
 
