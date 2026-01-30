@@ -2929,9 +2929,15 @@ const app = {
                 const itemAgeStr = item.building_age || "";
                 if (itemAgeStr) {
                     let actualAge = 999;
-                    if (itemAgeStr.includes("-")) actualAge = parseInt(itemAgeStr.split("-")[1]) || 999;
-                    else if (itemAgeStr.includes("+")) actualAge = 31;
-                    else actualAge = parseInt(itemAgeStr) || 999;
+                    if (itemAgeStr.includes("-")) {
+                        actualAge = parseInt(itemAgeStr.split("-")[1]);
+                        if (isNaN(actualAge)) actualAge = 999;
+                    } else if (itemAgeStr.includes("+")) {
+                        actualAge = 31;
+                    } else {
+                        const parsed = parseInt(itemAgeStr);
+                        actualAge = isNaN(parsed) ? 999 : parsed;
+                    }
                     if (actualAge > maxAge) return false;
                 } else {
                     return false; // Yaş verisi yoksa eşleşme yok
