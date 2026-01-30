@@ -927,6 +927,61 @@ body {
         flex-direction: column;
         align-items: stretch;
     }
+
+    /* FSBO Cards - Mobile Compact */
+    #fsbo-list .listing-card,
+    #fsbo-renewed-list .listing-card {
+        padding: 10px !important;
+    }
+
+    #fsbo-list .listing-card .card-content,
+    #fsbo-renewed-list .listing-card .card-content {
+        padding: 8px !important;
+    }
+
+    #fsbo-list .listing-card h4,
+    #fsbo-renewed-list .listing-card h4 {
+        font-size: 14px !important;
+    }
+
+    #fsbo-list .listing-card .fsbo-gallery img,
+    #fsbo-renewed-list .listing-card .fsbo-gallery img {
+        width: 55px !important;
+        height: 55px !important;
+    }
+
+    #fsbo-list .listing-card .fsbo-gallery,
+    #fsbo-renewed-list .listing-card .fsbo-gallery {
+        gap: 4px !important;
+        margin-bottom: 6px !important;
+    }
+
+    /* Genel listing kartları da küçülsün */
+    .listing-card {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .listing-header {
+        gap: 8px;
+    }
+
+    .listing-title {
+        font-size: 14px;
+    }
+
+    .listing-price-badge {
+        font-size: 13px;
+        padding: 4px 8px;
+    }
+
+    .listing-stats-grid {
+        gap: 8px;
+    }
+
+    .stat-item {
+        font-size: 11px;
+    }
 }
 
 #map-container {
