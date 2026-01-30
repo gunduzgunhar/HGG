@@ -2216,6 +2216,8 @@ const app = {
                     const maxAge = parseInt(customer.max_building_age);
                     const itemAgeStr = item.building_age || "";
 
+                    console.log(`[YAŞ DEBUG] Müşteri max yaş: ${maxAge}, İlan yaşı: "${itemAgeStr}"`);
+
                     if (itemAgeStr) {
                         let actualAge = 999;
                         if (itemAgeStr.includes("-")) actualAge = parseInt(itemAgeStr.split("-")[1]) || 999;
@@ -2223,16 +2225,22 @@ const app = {
                         else actualAge = parseInt(itemAgeStr) || 999;
 
                         buildingAgeMatch = actualAge <= maxAge;
+                        console.log(`[YAŞ DEBUG] Hesaplanan yaş: ${actualAge}, Eşleşme: ${buildingAgeMatch}`);
                     } else {
                         // Yaş verisi yoksa müşteri yaş tercihi varsa eşleşme
                         buildingAgeMatch = false;
+                        console.log(`[YAŞ DEBUG] İlan yaşı boş, eşleşme: false`);
                     }
                 }
 
                 // 6. Damage & Site (Listings typically)
                 // We'll skip complex checks for FSBO as data is often sparse
 
-                return regionMatch && roomMatch && kitchenMatch && budgetMatch && buildingAgeMatch;
+                const finalMatch = regionMatch && roomMatch && kitchenMatch && budgetMatch && buildingAgeMatch;
+                if (!buildingAgeMatch) {
+                    console.log(`[EŞLEŞME REDDEDİLDİ] Yaş kriteri: ${item.building_age || 'boş'}`);
+                }
+                return finalMatch;
             };
 
             // GET MATCHES
