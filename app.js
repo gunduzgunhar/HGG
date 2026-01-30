@@ -3061,11 +3061,47 @@ const app = {
         };
 
         let html = '';
+        const totalCount = listingMatches.length + findingMatches.length + fsboMatches.length;
+
         if (listingMatches.length === 0 && findingMatches.length === 0) {
             html = '<div class="empty-state"><p>Uygun eşleşme bulunamadı.</p></div>';
         } else {
-            html += listingMatches.map(x => renderMatchCard(x, 'listing')).join('');
-            html += findingMatches.map(x => renderMatchCard(x, 'finding')).join('');
+            // Toplam sayı başlığı
+            html += `<div style="grid-column: 1 / -1; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600;"><i class="ph ph-magnifying-glass"></i> Toplam ${totalCount} uygun ilan bulundu</span>
+                <span style="font-size: 12px; opacity: 0.9;">Portföy: ${listingMatches.length} | Bulum: ${findingMatches.length} | FSBO: ${fsboMatches.length}</span>
+            </div>`;
+
+            // Bölgelere göre grupla
+            const getNeighborhood = (item) => {
+                const loc = item.location || '';
+                const parts = loc.split(',');
+                return parts[0] ? parts[0].trim() : 'Diğer';
+            };
+
+            const groupedListings = {};
+            listingMatches.forEach(item => {
+                const neighborhood = getNeighborhood(item);
+                if (!groupedListings[neighborhood]) groupedListings[neighborhood] = [];
+                groupedListings[neighborhood].push(item);
+            });
+
+            // Her bölgeyi ayrı başlık ile göster
+            Object.keys(groupedListings).sort().forEach(neighborhood => {
+                const items = groupedListings[neighborhood];
+                html += `<div style="grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: #4f46e5; margin: 12px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #e0e7ff;">
+                    <i class="ph ph-map-pin"></i> ${neighborhood} <span style="font-weight: normal; color: #6b7280;">(${items.length} ilan)</span>
+                </div>`;
+                html += items.map(x => renderMatchCard(x, 'listing')).join('');
+            });
+
+            // Bulumlar
+            if (findingMatches.length > 0) {
+                html += `<div style="grid-column: 1 / -1; font-size: 13px; font-weight: 600; color: #3b82f6; margin: 12px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #dbeafe;">
+                    <i class="ph ph-binoculars"></i> Bulumlar <span style="font-weight: normal; color: #6b7280;">(${findingMatches.length})</span>
+                </div>`;
+                html += findingMatches.map(x => renderMatchCard(x, 'finding')).join('');
+            }
 
             if (fsboMatches.length > 0) {
                 html += `
