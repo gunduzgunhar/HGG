@@ -1725,10 +1725,30 @@ const app = {
                             <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Oda Tercihi</label>
                             <select name="room_pref" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
                                 <option value="">Farketmez</option>
-                                <option value="1+1" ${customer.room_pref === '1+1' ? 'selected' : ''}>1+1</option>
-                                <option value="2+1" ${customer.room_pref === '2+1' ? 'selected' : ''}>2+1</option>
-                                <option value="3+1" ${customer.room_pref === '3+1' ? 'selected' : ''}>3+1</option>
-                                <option value="4+1" ${customer.room_pref === '4+1' ? 'selected' : ''}>4+1</option>
+                                <option value="1+1" ${customer.room_pref?.includes('1+1') ? 'selected' : ''}>1+1</option>
+                                <option value="2+1" ${customer.room_pref?.includes('2+1') ? 'selected' : ''}>2+1</option>
+                                <option value="3+1" ${customer.room_pref?.includes('3+1') ? 'selected' : ''}>3+1</option>
+                                <option value="4+1" ${customer.room_pref?.includes('4+1') ? 'selected' : ''}>4+1</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Maks Bina Yaşı</label>
+                            <select name="max_building_age" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="">Farketmez</option>
+                                <option value="0" ${customer.max_building_age === '0' ? 'selected' : ''}>Sıfır (0)</option>
+                                <option value="5" ${customer.max_building_age === '5' ? 'selected' : ''}>5 yıl ve altı</option>
+                                <option value="10" ${customer.max_building_age === '10' ? 'selected' : ''}>10 yıl ve altı</option>
+                                <option value="15" ${customer.max_building_age === '15' ? 'selected' : ''}>15 yıl ve altı</option>
+                                <option value="20" ${customer.max_building_age === '20' ? 'selected' : ''}>20 yıl ve altı</option>
+                                <option value="30" ${customer.max_building_age === '30' ? 'selected' : ''}>30 yıl ve altı</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">Mutfak Tercihi</label>
+                            <select name="kitchen_pref" style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                                <option value="">Farketmez</option>
+                                <option value="Açık Mutfak" ${customer.kitchen_pref === 'Açık Mutfak' ? 'selected' : ''}>Açık Mutfak</option>
+                                <option value="Kapalı Mutfak" ${customer.kitchen_pref === 'Kapalı Mutfak' ? 'selected' : ''}>Kapalı Mutfak</option>
                             </select>
                         </div>
                         <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -1750,6 +1770,8 @@ const app = {
             customer.budget = formData.get('budget').replace(/\./g, '');
             customer.priority = formData.get('priority');
             customer.room_pref = formData.get('room_pref');
+            customer.max_building_age = formData.get('max_building_age');
+            customer.kitchen_pref = formData.get('kitchen_pref');
 
             this.saveData('customers');
             this.renderCustomers();
