@@ -957,59 +957,75 @@ const app = {
             if (storedFindings) this.data.findings = JSON.parse(storedFindings);
             if (storedTargets) this.data.targets = JSON.parse(storedTargets);
 
+            // localStorage'dan timestamp'i oku
+            const storedTimestamp = localStorage.getItem('rea_lastSaveTimestamp');
+            const localTimestamp = storedTimestamp ? parseInt(storedTimestamp) : 0;
+            this.lastSaveTimestamp = localTimestamp;
+
             // Then load from Firestore (cloud sync)
             if (window.db) {
                 const doc = await window.db.collection('emlak_data').doc(this.firestoreDocId).get();
                 if (doc.exists) {
                     const cloudData = doc.data();
-                    console.log("Firestore data loaded:", cloudData);
+                    const cloudTimestamp = cloudData.lastUpdated || 0;
+                    console.log("Firestore data loaded, cloud:", cloudTimestamp, "local:", localTimestamp);
 
-                    // FSBO Migration: Merge local FSBO with cloud FSBO (preserve old data)
-                    const localFsbo = this.data.fsbo || [];
-                    const cloudFsbo = cloudData.fsbo || [];
-                    const localFsboIds = new Set(localFsbo.map(f => f.id));
-                    const cloudFsboIds = new Set(cloudFsbo.map(f => f.id));
+                    // Sadece cloud daha güncel ise verileri al
+                    if (cloudTimestamp > localTimestamp) {
+                        // FSBO Migration: Merge local FSBO with cloud FSBO (preserve old data)
+                        const localFsbo = this.data.fsbo || [];
+                        const cloudFsbo = cloudData.fsbo || [];
+                        const localFsboIds = new Set(localFsbo.map(f => f.id));
+                        const cloudFsboIds = new Set(cloudFsbo.map(f => f.id));
 
-                    // Find local items not in cloud (need to be uploaded)
-                    const localOnlyFsbo = localFsbo.filter(f => !cloudFsboIds.has(f.id));
-                    if (localOnlyFsbo.length > 0) {
-                        console.log(`FSBO Migrasyon: ${localOnlyFsbo.length} eski kayıt Firebase'e aktarılacak`);
-                        // Merge: cloud data + local-only data
-                        this.data.fsbo = [...cloudFsbo, ...localOnlyFsbo];
-                        // Trigger save to upload local data to cloud
-                        setTimeout(() => this.saveToFirestore(), 2000);
+                        // Find local items not in cloud (need to be uploaded)
+                        const localOnlyFsbo = localFsbo.filter(f => !cloudFsboIds.has(f.id));
+                        if (localOnlyFsbo.length > 0) {
+                            console.log(`FSBO Migrasyon: ${localOnlyFsbo.length} eski kayıt Firebase'e aktarılacak`);
+                            // Merge: cloud data + local-only data
+                            this.data.fsbo = [...cloudFsbo, ...localOnlyFsbo];
+                            // Trigger save to upload local data to cloud
+                            setTimeout(() => this.saveToFirestore(), 2000);
+                        } else {
+                            this.data.fsbo = cloudFsbo;
+                        }
+
+                        // Merge cloud data (cloud takes priority for other data)
+                        if (cloudData.listings) this.data.listings = cloudData.listings;
+                        if (cloudData.customers) {
+                            // Preserve local interactions/matchHistory before overwriting
+                            const localCustomers = this.data.customers || [];
+                            this.data.customers = cloudData.customers;
+                            localCustomers.forEach(local => {
+                                const cloud = this.data.customers.find(c => c.id == local.id);
+                                if (!cloud) return;
+                                if (local.interactions && Object.keys(local.interactions).length > 0) {
+                                    cloud.interactions = { ...(cloud.interactions || {}), ...local.interactions };
+                                }
+                                if (local.matchHistory && Object.keys(local.matchHistory).length > 0) {
+                                    cloud.matchHistory = { ...(cloud.matchHistory || {}), ...local.matchHistory };
+                                }
+                            });
+                        }
+                        if (cloudData.appointments) this.data.appointments = cloudData.appointments;
+                        if (cloudData.findings) this.data.findings = cloudData.findings;
+                        if (cloudData.targets) this.data.targets = cloudData.targets;
+
+                        // Update localStorage with cloud data
+                        localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
+                        localStorage.setItem('rea_customers', JSON.stringify(this.data.customers || []));
+                        localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments || []));
+                        localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
+                        localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
+                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
+
+                        this.lastSaveTimestamp = cloudTimestamp;
+                        localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
                     } else {
-                        this.data.fsbo = cloudFsbo;
+                        console.log("Local veri daha güncel, Firestore'a yükleniyor...");
+                        // Local daha güncel, Firestore'u güncelle
+                        setTimeout(() => this.saveToFirestore(), 1000);
                     }
-
-                    // Merge cloud data (cloud takes priority for other data)
-                    if (cloudData.listings) this.data.listings = cloudData.listings;
-                    if (cloudData.customers) {
-                        // Preserve local interactions/matchHistory before overwriting
-                        const localCustomers = this.data.customers || [];
-                        this.data.customers = cloudData.customers;
-                        localCustomers.forEach(local => {
-                            const cloud = this.data.customers.find(c => c.id == local.id);
-                            if (!cloud) return;
-                            if (local.interactions && Object.keys(local.interactions).length > 0) {
-                                cloud.interactions = { ...(cloud.interactions || {}), ...local.interactions };
-                            }
-                            if (local.matchHistory && Object.keys(local.matchHistory).length > 0) {
-                                cloud.matchHistory = { ...(cloud.matchHistory || {}), ...local.matchHistory };
-                            }
-                        });
-                    }
-                    if (cloudData.appointments) this.data.appointments = cloudData.appointments;
-                    if (cloudData.findings) this.data.findings = cloudData.findings;
-                    if (cloudData.targets) this.data.targets = cloudData.targets;
-
-                    // Update localStorage with cloud data
-                    localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
-                    localStorage.setItem('rea_customers', JSON.stringify(this.data.customers || []));
-                    localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments || []));
-                    localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
-                    localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
-                    localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
                 }
                 this.firestoreLoaded = true;
 
@@ -1088,6 +1104,9 @@ const app = {
             } else if (key === 'targets') {
                 localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
             }
+            // Timestamp'i localStorage'a da kaydet (sayfa yenilendiğinde karşılaştırma için)
+            this.lastSaveTimestamp = Date.now();
+            localStorage.setItem('rea_lastSaveTimestamp', this.lastSaveTimestamp.toString());
         } catch (e) {
             console.error("LocalStorage Save Error:", e);
             if (e.name === 'QuotaExceededError' || e.code === 22) {
