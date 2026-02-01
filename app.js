@@ -1050,12 +1050,14 @@ const app = {
                 const cloudData = doc.data();
                 console.log("Real-time update received");
 
-                // Skip if we just saved (cooldown 3 seconds)
-                if (Date.now() - this.lastSaveTime < 3000) return;
+                // Skip if we just saved (cooldown 5 seconds)
+                if (Date.now() - this.lastSaveTime < 5000) return;
 
                 // Only update if data actually changed (compare timestamps)
                 const cloudTimestamp = cloudData.lastUpdated || 0;
-                const localTimestamp = this.lastSaveTimestamp || 0;
+                // localStorage'dan güncel timestamp'i oku
+                const storedTs = localStorage.getItem('rea_lastSaveTimestamp');
+                const localTimestamp = storedTs ? parseInt(storedTs) : (this.lastSaveTimestamp || 0);
 
                 if (cloudTimestamp > localTimestamp) {
                     // Preserve local interactions/matchHistory
@@ -3496,10 +3498,12 @@ const app = {
 
         this.data.listings[index] = updatedListing;
         this.saveData('listings');
+        // Firestore'a HEMEN kaydet (debounce olmadan)
+        this.saveToFirestore(true);
         this.renderListings();
         this.updateStats();
         this.modals.closeAll();
-        alert("İlan güncellendi! Sokak: " + updatedListing.street);
+        alert("İlan güncellendi!");
     },
 
     deleteListing(id) {
