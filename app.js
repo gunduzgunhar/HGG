@@ -3470,6 +3470,12 @@ const app = {
         const neighborhood = document.getElementById('edit-listing-neighborhood').value;
         const location = `${neighborhood}, ${district}, Adana`;
 
+        // DEBUG: Form değerlerini kontrol et
+        console.log('=== SAVE EDIT LISTING DEBUG ===');
+        console.log('interior_condition from form:', formData.get('interior_condition'));
+        console.log('damage from form:', formData.get('damage'));
+        console.log('OLD interior_condition:', this.data.listings[index].interior_condition);
+
         const updatedListing = {
             ...this.data.listings[index],
             title: formData.get('title'),
@@ -3496,8 +3502,17 @@ const app = {
             external_link: formData.get('external_link')
         };
 
+        console.log('NEW interior_condition:', updatedListing.interior_condition);
+
         this.data.listings[index] = updatedListing;
         this.saveData('listings');
+
+        // DEBUG: localStorage'a kaydedildi mi kontrol et
+        const saved = JSON.parse(localStorage.getItem('rea_listings'));
+        const savedListing = saved.find(l => l.id === id);
+        console.log('SAVED interior_condition in localStorage:', savedListing?.interior_condition);
+        console.log('=== END DEBUG ===');
+
         // Firestore'a HEMEN kaydet (debounce olmadan)
         this.saveToFirestore(true);
         this.renderListings();
