@@ -3800,62 +3800,7 @@ app.openAddListingModal = function (id, mode = 'listing') {
     }
 };
 
-app.openEditListingModal = function (id) {
-    let item = this.data.listings.find(x => x.id === id);
-    let mode = 'listing';
-
-    if (!item) {
-        item = this.data.findings.find(x => x.id === id);
-        mode = 'finding';
-    }
-
-    if (!item) return;
-
-    window.currentAddMode = mode;
-    const header = document.querySelector('#modal-add-listing h3');
-    if (header) header.textContent = mode === 'finding' ? 'Bulum Düzenle' : 'İlan Düzenle';
-
-    this.modals.open('add-listing');
-
-    const form = document.getElementById('form-add-listing');
-    if (!form) return;
-
-    localStorage.setItem('rea_temp_edit_id', item.id); // Persistent storage
-    if (window.log) window.log("Edit Open: ID stored=" + item.id);
-
-    form.title.value = item.title;
-    form.price.value = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '';
-
-    // Parse Location
-    if (item.location) {
-        const parts = item.location.split(',').map(s => s.trim());
-        if (parts.length >= 2) {
-            const dist = parts[parts.length - 2];
-            const neigh = parts[parts.length - 3];
-
-            const distSelect = document.getElementById('listing-district');
-            if (distSelect && dist) {
-                distSelect.value = dist;
-                if (app.onListingDistrictChange) app.onListingDistrictChange();
-                setTimeout(() => {
-                    const neighSelect = document.getElementById('listing-neighborhood');
-                    if (neighSelect && neigh) neighSelect.value = neigh;
-                }, 50);
-            }
-        }
-    }
-
-    // Set Fields
-    const fields = ['type', 'status', 'rooms', 'size_net', 'size_gross', 'floor_current', 'floor_total', 'building_age', 'damage', 'interior_condition', 'facade', 'deed_status', 'kitchen', 'details', 'external_link', 'owner_name', 'owner_phone'];
-    fields.forEach(f => {
-        if (form[f]) form[f].value = item[f] || '';
-    });
-
-    form.dataset.editId = item.id;
-
-    document.querySelector('#modal-add-listing h3').textContent = 'İlanı Düzenle';
-    document.querySelector('#form-add-listing button[type="submit"]').textContent = 'Güncelle';
-};
+// REMOVED: Duplicate openEditListingModal - using the one inside app object (line ~3388)
 
 app.addListing = function (formData) {
     try {
