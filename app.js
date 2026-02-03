@@ -3410,6 +3410,7 @@ const app = {
         if (form.elements['building_age']) form.elements['building_age'].value = listing.building_age || '';
         if (form.elements['damage']) form.elements['damage'].value = listing.damage || 'Hasarsız';
         if (form.elements['interior_condition']) form.elements['interior_condition'].value = listing.interior_condition || 'Normal';
+        if (form.elements['site_features']) form.elements['site_features'].value = listing.site_features || '';
         if (form.elements['facade']) form.elements['facade'].value = listing.facade || '';
         if (form.elements['deed_status']) form.elements['deed_status'].value = listing.deed_status || '';
 
