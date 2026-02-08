@@ -1120,6 +1120,16 @@ const app = {
             normalizePriceLike(item, 'price');
             normalizePriceLike(item, 'final_price');
 
+            // Legacy shorthand fix for sold/deposit final price (e.g., 6400 => 6.400.000)
+            if ((item.status === 'sold' || item.status === 'deposit') && item.final_price) {
+                const fp = Number(item.final_price);
+                const lp = Number(item.price || 0);
+                if (fp > 0 && fp < 100000 && lp >= 500000) {
+                    item.final_price = String(fp * 1000);
+                    changed = true;
+                }
+            }
+
             // Legacy migration: priceHistory[] -> price_history[]
             if ((!Array.isArray(item.price_history) || item.price_history.length === 0) && Array.isArray(item.priceHistory) && item.priceHistory.length > 0) {
                 const legacy = item.priceHistory
@@ -4583,10 +4593,10 @@ app.handleStatusUpdate = function (event, id, newStatus) {
 
     if (newStatus === 'sold') {
         titleEl.textContent = 'Satış Bilgisi Giriniz';
-        document.getElementById('status-final-price').placeholder = listingPrice;
+        document.getElementById('status-final-price').placeholder = `${listingPrice} (kısa: 6400 = 6.400.000)`;
     } else {
         titleEl.textContent = 'Kapora Bilgisi Girinız';
-        document.getElementById('status-final-price').placeholder = 'Kapora tutarı...';
+        document.getElementById('status-final-price').placeholder = 'Kapora tutarı... (kısa: 150 = 150.000)';
     }
 
     // Clear previous inputs
@@ -4618,6 +4628,15 @@ app.updateListingStatus = function (id, status, price, notes, date) {
     }
 };
 
+app.parseStatusPriceInput = function (rawInput) {
+    const digits = String(rawInput || '').replace(/\D/g, '');
+    if (!digits) return 0;
+    let value = parseInt(digits, 10);
+    // Short notation support: 6400 => 6.400.000 TL
+    if (digits.length <= 4) value *= 1000;
+    return value;
+};
+
 // Form Handler (Ensure duplicate listener check if necessary, or just add it safely)
 // Since this is inside app.js body which runs once, it's fine.
 const statusForm = document.getElementById('form-status-update');
@@ -4630,7 +4649,7 @@ if (statusForm) {
         const id = Number(document.getElementById('status-update-id').value);
         const status = document.getElementById('status-update-type').value;
         const priceStr = document.getElementById('status-final-price').value;
-        const price = parseInt(priceStr.replace(/\./g, '')) || 0;
+        const price = app.parseStatusPriceInput(priceStr);
         const notes = document.getElementById('status-notes').value;
         const date = document.getElementById('status-date').value;
 
