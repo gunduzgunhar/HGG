@@ -496,7 +496,7 @@ const app = {
             const soldPrice = toNumber(sold.final_price);
             const unitPrice = soldSize > 0 ? soldPrice / soldSize : 0;
             const soldDate = sold.status_date || sold.date || null;
-            return { sold, unitPrice, soldDate };
+            return { sold, unitPrice, soldDate, soldSize };
         }).filter(x => x.unitPrice > 0);
 
         soldComparableRawCount = soldCandidatesRaw.length;
@@ -542,10 +542,41 @@ const app = {
             }
         }
 
+        // Same-building comp priority (building_name OR street), blended with neighborhood comps.
+        let sameBuildingComparableCount = 0;
+        let sameBuildingBlendApplied = false;
+        const listingStreetNorm = normalizeText(listing.street || '');
+        const listingBuildingNorm = normalizeText(listing.building_name || '');
+        if (soldCandidates.length > 0 && (listingStreetNorm || listingBuildingNorm)) {
+            const sameBuildingCandidates = soldCandidates.filter(x => {
+                const soldStreetNorm = normalizeText(x.sold.street || '');
+                const soldBuildingNorm = normalizeText(x.sold.building_name || '');
+                const byBuilding = listingBuildingNorm && soldBuildingNorm && listingBuildingNorm === soldBuildingNorm;
+                const byStreet = listingStreetNorm && soldStreetNorm && listingStreetNorm === soldStreetNorm;
+                const sizeSimilarity = Math.abs((x.soldSize - size) / size) <= 0.15;
+                return sizeSimilarity && (byBuilding || byStreet);
+            });
+
+            if (sameBuildingCandidates.length > 0) {
+                sameBuildingComparableCount = sameBuildingCandidates.length;
+                const sameBuildingMedianUnit = median(sameBuildingCandidates.map(x => x.unitPrice));
+                const neighborhoodUnit = marketAvg;
+                const buildingWeight = sameBuildingComparableCount >= 2 ? 0.70 : 0.60;
+                marketAvg = Math.round(sameBuildingMedianUnit * buildingWeight + neighborhoodUnit * (1 - buildingWeight));
+                dataSource = `Aynı Bina/Sokak + Mahalle Harmanı (${sameBuildingComparableCount} bina emsali)`;
+                locationCoverage = 'sold_same_building';
+                sameBuildingBlendApplied = true;
+            }
+        }
+
         // Start with base value
         let baseValue = marketAvg * size;
         let estimatedValue = baseValue;
         let adjustments = [];
+
+        // If same-building comps are available, reduce macro-attribute impact to avoid over-correction.
+        const structuralAdjustmentDamping = sameBuildingComparableCount >= 2 ? 0.35 : (sameBuildingComparableCount === 1 ? 0.50 : 1.0);
+        const dampMultiplier = (mult) => 1 + ((mult - 1) * structuralAdjustmentDamping);
 
         // 3. PERCENTAGE-BASED ADJUSTMENTS (More realistic)
         // SMART: Skip adjustments if sold data has same characteristics (avoid double-counting)
@@ -604,6 +635,11 @@ const app = {
                     ageLabel = `Bina Yaşı Etkisi ${percentChange > 0 ? '+' : ''}%${percentChange}`;
                 }
             }
+        }
+
+        ageMultiplier = dampMultiplier(ageMultiplier);
+        if (ageLabel && structuralAdjustmentDamping < 1) {
+            ageLabel += ' (bina emsali ile yumuşatıldı)';
         }
 
         if (ageLabel) {
@@ -671,6 +707,11 @@ const app = {
                     siteLabel = 'Kısmi Sosyal Donatı +%8';
                 }
             }
+        }
+
+        siteMultiplier = dampMultiplier(siteMultiplier);
+        if (siteLabel && structuralAdjustmentDamping < 1) {
+            siteLabel += ' (bina emsali ile yumuşatıldı)';
         }
 
         if (siteLabel) {
@@ -746,6 +787,11 @@ const app = {
             }
         }
 
+        deedMultiplier = dampMultiplier(deedMultiplier);
+        if (deedLabel && structuralAdjustmentDamping < 1) {
+            deedLabel += ' (bina emsali ile yumuşatıldı)';
+        }
+
         if (deedLabel) {
             const deedChange = estimatedValue * (deedMultiplier - 1);
             adjustments.push({ label: deedLabel, amount: deedChange, percent: Math.round((deedMultiplier - 1) * 100) });
@@ -777,6 +823,11 @@ const app = {
                 kitchenMultiplier = 1.07; // +7%
                 kitchenLabel = 'Kapalı Mutfak +%7';
             }
+        }
+
+        kitchenMultiplier = dampMultiplier(kitchenMultiplier);
+        if (kitchenLabel && structuralAdjustmentDamping < 1) {
+            kitchenLabel += ' (bina emsali ile yumuşatıldı)';
         }
 
         if (kitchenLabel) {
@@ -838,9 +889,11 @@ const app = {
             else if (soldMedianAgeDays <= 180) recencyScore = 14;
             else if (soldMedianAgeDays <= 365) recencyScore = 8;
         }
-        const coverageScore = locationCoverage === 'sold_neighborhood'
-            ? 15
-            : (locationCoverage === 'neighborhood' ? 12 : (locationCoverage === 'district' ? 8 : 4));
+        const coverageScore = locationCoverage === 'sold_same_building'
+            ? 18
+            : (locationCoverage === 'sold_neighborhood'
+                ? 15
+                : (locationCoverage === 'neighborhood' ? 12 : (locationCoverage === 'district' ? 8 : 4)));
         const featureScore = Math.round(featureCompleteness * 15);
         const confidence = clamp(soldScore + recencyScore + coverageScore + featureScore, 0, 100);
         const confidenceLabel = confidence >= 75 ? 'Yüksek' : (confidence >= 50 ? 'Orta' : 'Düşük');
@@ -928,11 +981,12 @@ const app = {
                         <span style="font-size:13px; font-weight:800; color:${confidenceColor};">${confidence}/100 (${confidenceLabel})</span>
                     </div>
                     <div style="font-size:11px; color:#92400e; margin-top:6px;">
-                        Karşılaştırma: ${soldComparableCount}/${soldComparableRawCount || soldComparableCount} satış, veri yaşı: ${soldMedianAgeDays !== null ? Math.round(soldMedianAgeDays) + ' gün (medyan)' : 'bilinmiyor'}, volatilite: ${(volatility * 100).toFixed(1)}%
+                        Karşılaştırma: ${soldComparableCount}/${soldComparableRawCount || soldComparableCount} satış, bina emsali: ${sameBuildingComparableCount || 0}, veri yaşı: ${soldMedianAgeDays !== null ? Math.round(soldMedianAgeDays) + ' gün (medyan)' : 'bilinmiyor'}, volatilite: ${(volatility * 100).toFixed(1)}%
                     </div>
                     <div style="font-size:11px; color:#92400e; margin-top:4px;">
                         Dinamik eşikler: Çok Uygun &lt; ${cheapThreshold.toFixed(1)}% • Piyasa ≤ ${fairUpperThreshold.toFixed(1)}% • Biraz Yüksek ≤ ${highUpperThreshold.toFixed(1)}%
                     </div>
+                    ${sameBuildingBlendApplied ? `<div style="font-size:11px; color:#92400e; margin-top:4px;">Aynı bina/sokak emsali bulundu: mahalle verisiyle harmanlanmış fiyat kullanıldı.</div>` : ''}
                 </div>
                 
                 <div style="background:#F0FDF4; border-left: 4px solid #10B981; padding: 10px; border-radius: 4px;">
