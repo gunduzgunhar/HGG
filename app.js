@@ -1122,6 +1122,41 @@ const app = {
             normalizePriceLike(item, 'price');
             normalizePriceLike(item, 'final_price');
 
+            // Legacy migration: priceHistory[] -> price_history[]
+            if ((!Array.isArray(item.price_history) || item.price_history.length === 0) && Array.isArray(item.priceHistory) && item.priceHistory.length > 0) {
+                const legacy = item.priceHistory
+                    .map(p => ({
+                        price: Number(this.normalizeMoneyValue(p && p.price)),
+                        date: p && p.date ? p.date : null
+                    }))
+                    .filter(p => p.price > 0);
+                const currentPrice = Number(this.normalizeMoneyValue(item.price));
+                const seq = legacy.map(p => p.price);
+                if (currentPrice > 0 && (seq.length === 0 || seq[seq.length - 1] !== currentPrice)) {
+                    seq.push(currentPrice);
+                }
+                const converted = [];
+                for (let i = 1; i < seq.length; i++) {
+                    const oldPrice = seq[i - 1];
+                    const newPrice = seq[i];
+                    if (oldPrice <= 0 || newPrice <= 0 || oldPrice === newPrice) continue;
+                    const change = newPrice - oldPrice;
+                    converted.push({
+                        old_price: oldPrice,
+                        new_price: newPrice,
+                        change: change,
+                        change_pct: Number(((change / oldPrice) * 100).toFixed(2)),
+                        date: (legacy[i] && legacy[i].date) || (legacy[i - 1] && legacy[i - 1].date) || item.status_date || item.date || new Date().toISOString(),
+                        source: 'legacy_price_history',
+                        note: change < 0 ? 'Fiyat düşürüldü' : 'Fiyat yükseltildi'
+                    });
+                }
+                if (converted.length > 0) {
+                    item.price_history = converted;
+                    changed = true;
+                }
+            }
+
             if (Array.isArray(item.price_history)) {
                 item.price_history.forEach(entry => {
                     if (!entry) return;
@@ -1164,6 +1199,53 @@ const app = {
         (this.data.customers || []).forEach(item => normalizePriceLike(item, 'budget'));
 
         return changed;
+    },
+
+    getListingPriceChanges(listing) {
+        if (!listing) return [];
+        const toNum = (v) => Number(this.normalizeMoneyValue(v));
+        let normalized = [];
+
+        if (Array.isArray(listing.price_history) && listing.price_history.length > 0) {
+            normalized = listing.price_history.map(h => {
+                const oldPrice = toNum(h && h.old_price);
+                const newPrice = toNum(h && h.new_price);
+                const change = newPrice - oldPrice;
+                const pct = oldPrice > 0 ? Number(((change / oldPrice) * 100).toFixed(2)) : 0;
+                return {
+                    old_price: oldPrice,
+                    new_price: newPrice,
+                    change: change,
+                    change_pct: pct,
+                    date: h && h.date ? h.date : null
+                };
+            }).filter(h => h.old_price > 0 && h.new_price > 0 && h.old_price !== h.new_price);
+        }
+
+        if (normalized.length === 0 && Array.isArray(listing.priceHistory) && listing.priceHistory.length > 0) {
+            const legacy = listing.priceHistory
+                .map(p => ({ price: toNum(p && p.price), date: p && p.date ? p.date : null }))
+                .filter(p => p.price > 0);
+            const currentPrice = toNum(listing.price);
+            const seq = legacy.map(p => p.price);
+            if (currentPrice > 0 && (seq.length === 0 || seq[seq.length - 1] !== currentPrice)) seq.push(currentPrice);
+
+            for (let i = 1; i < seq.length; i++) {
+                const oldPrice = seq[i - 1];
+                const newPrice = seq[i];
+                if (oldPrice <= 0 || newPrice <= 0 || oldPrice === newPrice) continue;
+                const change = newPrice - oldPrice;
+                normalized.push({
+                    old_price: oldPrice,
+                    new_price: newPrice,
+                    change: change,
+                    change_pct: Number(((change / oldPrice) * 100).toFixed(2)),
+                    date: (legacy[i] && legacy[i].date) || (legacy[i - 1] && legacy[i - 1].date) || listing.status_date || listing.date || null
+                });
+            }
+        }
+
+        return normalized.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
     },
 
     async loadData() {
@@ -2418,7 +2500,7 @@ const app = {
         // Populate Details
         const detailsContainer = document.getElementById('gallery-listing-details');
         if (detailsContainer) {
-            const history = Array.isArray(listing.price_history) ? listing.price_history : [];
+            const history = this.getListingPriceChanges(listing);
             const latestChange = history
                 .filter(h => Number(h.old_price || 0) > 0 && Number(h.new_price || 0) > 0 && Number(h.old_price) !== Number(h.new_price))
                 .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))[0];
@@ -3989,7 +4071,7 @@ const app = {
 
         const allChanges = [];
         (this.data.listings || []).forEach(listing => {
-            const history = Array.isArray(listing.price_history) ? listing.price_history : [];
+            const history = this.getListingPriceChanges(listing);
             history.forEach(entry => {
                 const oldPrice = Number(entry.old_price || 0);
                 const newPrice = Number(entry.new_price || 0);
