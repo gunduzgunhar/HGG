@@ -550,25 +550,29 @@ const app = {
         // 3. PERCENTAGE-BASED ADJUSTMENTS (More realistic)
         // SMART: Skip adjustments if sold data has same characteristics (avoid double-counting)
 
-        // Building Age - MOST IMPORTANT FACTOR
-        // Helper function to get age multiplier
-        const getAgeMultiplier = (ageVal) => {
-            if (ageVal === '0' || ageVal === '1' || ageVal === '2' || ageVal === '3' || ageVal === '4' || ageVal === '5') {
-                return 1.20; // +20%
-            } else if (ageVal === '6-10') {
-                return 1.10; // +10%
-            } else if (ageVal === '11-15') {
-                return 1.0; // Baseline
-            } else if (ageVal === '16-20') {
-                return 0.90; // -10%
-            } else if (ageVal === '21-25') {
-                return 0.78; // -22%
-            } else if (ageVal === '26-30') {
-                return 0.65; // -35%
-            } else if (ageVal === '30+') {
-                return 0.60; // -40%
-            }
-            return 1.0; // Default baseline
+        // Building Age - smooth and capped model
+        const getAgeMidpointYears = (ageVal) => {
+            if (!ageVal) return null;
+            const v = String(ageVal).trim();
+            if (v === '0' || v === '1' || v === '2' || v === '3' || v === '4' || v === '5') return 2.5;
+            if (v === '6-10') return 8;
+            if (v === '11-15') return 13;
+            if (v === '16-20') return 18;
+            if (v === '21-25') return 23;
+            if (v === '26-30') return 28;
+            if (v === '30+') return 33;
+            return null;
+        };
+        const getAbsoluteAgePercent = (ageVal) => {
+            // More conservative absolute effect than old hard ratios
+            if (ageVal === '0' || ageVal === '1' || ageVal === '2' || ageVal === '3' || ageVal === '4' || ageVal === '5') return 12;
+            if (ageVal === '6-10') return 6;
+            if (ageVal === '11-15') return 0;
+            if (ageVal === '16-20') return -4;
+            if (ageVal === '21-25') return -8;
+            if (ageVal === '26-30') return -12;
+            if (ageVal === '30+') return -16;
+            return 0;
         };
 
         const age = listing.building_age || '';
@@ -578,32 +582,26 @@ const app = {
         const sameAgeAsSold = usingSoldData && soldDataAge && age === soldDataAge;
 
         if (!sameAgeAsSold) {
-            const listingAgeMult = getAgeMultiplier(age);
-
             if (usingSoldData && soldDataAge) {
-                // RELATIVE adjustment: compare to sold data's age
-                const soldAgeMult = getAgeMultiplier(soldDataAge);
-                ageMultiplier = listingAgeMult / soldAgeMult;
-
-                const percentChange = Math.round((ageMultiplier - 1) * 100);
-                if (percentChange !== 0) {
-                    ageLabel = `Yaş Farkı (${soldDataAge} → ${age}) ${percentChange > 0 ? '+' : ''}%${percentChange}`;
+                // RELATIVE adjustment: smoother difference, capped and sample-aware
+                const listingYears = getAgeMidpointYears(age);
+                const soldYears = getAgeMidpointYears(soldDataAge);
+                if (listingYears !== null && soldYears !== null) {
+                    // ~3% per 5 years => 0.6% per year
+                    const rawPercent = (soldYears - listingYears) * 0.6;
+                    const sampleFactor = clamp(0.45 + Math.min(soldComparableCount, 10) * 0.055, 0.5, 1.0);
+                    const percentChange = Math.round(clamp(rawPercent * sampleFactor, -20, 20));
+                    ageMultiplier = 1 + (percentChange / 100);
+                    if (percentChange !== 0) {
+                        ageLabel = `Yaş Farkı (${soldDataAge} → ${age}) ${percentChange > 0 ? '+' : ''}%${percentChange}`;
+                    }
                 }
             } else {
-                // ABSOLUTE adjustment: no sold data, use absolute multiplier
-                ageMultiplier = listingAgeMult;
-                if (age === '0' || age === '1' || age === '2' || age === '3' || age === '4' || age === '5') {
-                    ageLabel = 'Yeni Bina (0-5 yaş) +%20';
-                } else if (age === '6-10') {
-                    ageLabel = 'Genç Bina (6-10 yaş) +%10';
-                } else if (age === '16-20') {
-                    ageLabel = 'Orta Yaşlı Bina (16-20 yaş) -%10';
-                } else if (age === '21-25') {
-                    ageLabel = 'Eski Bina (21-25 yaş) -%22';
-                } else if (age === '26-30') {
-                    ageLabel = 'Çok Eski Bina (26-30 yaş) -%35';
-                } else if (age === '30+') {
-                    ageLabel = 'Yaşlı Bina (30+ yaş) -%40';
+                // ABSOLUTE adjustment: conservative baseline
+                const percentChange = getAbsoluteAgePercent(age);
+                ageMultiplier = 1 + (percentChange / 100);
+                if (percentChange !== 0) {
+                    ageLabel = `Bina Yaşı Etkisi ${percentChange > 0 ? '+' : ''}%${percentChange}`;
                 }
             }
         }
