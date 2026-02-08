@@ -1097,6 +1097,75 @@ const app = {
     firestoreDocId: 'main_data',
     firestoreLoaded: false,
 
+    normalizeMoneyValue(value) {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
+        const digits = String(value).replace(/\D/g, '');
+        if (!digits) return '';
+        return String(parseInt(digits, 10));
+    },
+
+    normalizeLoadedData() {
+        let changed = false;
+        const normalizePriceLike = (obj, key) => {
+            if (!obj || !(key in obj)) return;
+            const current = obj[key];
+            if (current === null || current === undefined || current === '') return;
+            const normalized = this.normalizeMoneyValue(current);
+            if (normalized !== '' && String(current) !== normalized) {
+                obj[key] = normalized;
+                changed = true;
+            }
+        };
+
+        (this.data.listings || []).forEach(item => {
+            normalizePriceLike(item, 'price');
+            normalizePriceLike(item, 'final_price');
+
+            if (Array.isArray(item.price_history)) {
+                item.price_history.forEach(entry => {
+                    if (!entry) return;
+                    const oldRaw = entry.old_price;
+                    const newRaw = entry.new_price;
+                    const oldNorm = this.normalizeMoneyValue(oldRaw);
+                    const newNorm = this.normalizeMoneyValue(newRaw);
+                    const oldNum = oldNorm ? Number(oldNorm) : 0;
+                    const newNum = newNorm ? Number(newNorm) : 0;
+
+                    if (oldNorm && String(oldRaw) !== String(oldNum)) { entry.old_price = oldNum; changed = true; }
+                    if (newNorm && String(newRaw) !== String(newNum)) { entry.new_price = newNum; changed = true; }
+
+                    if (oldNum > 0 && newNum > 0) {
+                        const computedChange = newNum - oldNum;
+                        const computedPct = Number(((computedChange / oldNum) * 100).toFixed(2));
+                        if (entry.change !== computedChange) { entry.change = computedChange; changed = true; }
+                        if (entry.change_pct !== computedPct) { entry.change_pct = computedPct; changed = true; }
+                    }
+                });
+            }
+        });
+
+        (this.data.findings || []).forEach(item => normalizePriceLike(item, 'price'));
+        (this.data.targets || []).forEach(item => normalizePriceLike(item, 'price'));
+        (this.data.fsbo || []).forEach(item => {
+            normalizePriceLike(item, 'price');
+            if (Array.isArray(item.priceHistory)) {
+                item.priceHistory.forEach(p => {
+                    if (!p || !('price' in p)) return;
+                    const current = p.price;
+                    const normalized = this.normalizeMoneyValue(current);
+                    if (normalized !== '' && String(current) !== normalized) {
+                        p.price = normalized;
+                        changed = true;
+                    }
+                });
+            }
+        });
+        (this.data.customers || []).forEach(item => normalizePriceLike(item, 'budget'));
+
+        return changed;
+    },
+
     async loadData() {
         try {
             // First load from localStorage (fast, offline)
@@ -1193,6 +1262,17 @@ const app = {
             console.error('Data loading error:', error);
         }
 
+        // Normalize numeric money fields loaded from local/cloud to prevent format mismatches.
+        const normalized = this.normalizeLoadedData();
+        if (normalized) {
+            localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
+            localStorage.setItem('rea_customers', JSON.stringify(this.data.customers || []));
+            localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
+            localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
+            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
+            if (window.db) setTimeout(() => this.saveToFirestore(), 1200);
+        }
+
         // Fotoğrafları IndexedDB'ye taşı (tek seferlik migrasyon)
         try { await this.migratePhotosToIndexedDB(); } catch (e) { console.error('Photo migration error:', e); }
 
@@ -1235,6 +1315,7 @@ const app = {
                     this.data.fsbo = cloudData.fsbo || [];
                     this.data.findings = cloudData.findings || [];
                     this.data.targets = cloudData.targets || [];
+                    this.normalizeLoadedData();
 
                     // Refresh UI
                     this.renderAll();
