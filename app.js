@@ -370,71 +370,176 @@ const app = {
         const listing = this.data.listings.find(l => l.id === id);
         if (!listing) return;
 
-        // 1. Get Base Info
-        const price = parseInt(listing.price);
-        const size = parseInt(listing.size_net || listing.size_gross || 100);
+        const toNumber = (value) => {
+            const cleaned = String(value || '').replace(/[^\d]/g, '');
+            const parsed = parseInt(cleaned, 10);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const normalizeText = (value) => String(value || '')
+            .toLocaleLowerCase('tr-TR')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+        const parseLocation = (loc) => {
+            const parts = String(loc || '').split(',').map(s => s.trim()).filter(Boolean);
+            return {
+                neighborhood: parts[0] || '',
+                district: parts[1] || ''
+            };
+        };
+        const median = (arr) => {
+            if (!arr || arr.length === 0) return 0;
+            const sorted = [...arr].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+        const quantile = (arr, q) => {
+            if (!arr || arr.length === 0) return 0;
+            const sorted = [...arr].sort((a, b) => a - b);
+            const pos = (sorted.length - 1) * q;
+            const base = Math.floor(pos);
+            const rest = pos - base;
+            return sorted[base + 1] !== undefined
+                ? sorted[base] + rest * (sorted[base + 1] - sorted[base])
+                : sorted[base];
+        };
+        const stdDev = (arr) => {
+            if (!arr || arr.length === 0) return 0;
+            const mean = arr.reduce((s, n) => s + n, 0) / arr.length;
+            const variance = arr.reduce((s, n) => s + Math.pow(n - mean, 2), 0) / arr.length;
+            return Math.sqrt(variance);
+        };
+        const modeValue = (arr) => {
+            if (!arr || arr.length === 0) return null;
+            const counts = {};
+            let winner = arr[0];
+            let maxCount = 0;
+            arr.forEach(v => {
+                const key = String(v);
+                counts[key] = (counts[key] || 0) + 1;
+                if (counts[key] > maxCount) {
+                    maxCount = counts[key];
+                    winner = v;
+                }
+            });
+            return winner;
+        };
+        const daysSince = (dateValue) => {
+            const d = new Date(dateValue);
+            if (isNaN(d)) return null;
+            return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
+        };
+        const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 
-        // 2. Get Neighborhood Average - PRIORITY: Sold listings > Market data
-        let marketAvg = 25000; // Fallback
-        let neighborhood = '';
+        // 1. Base input
+        const price = toNumber(listing.price);
+        const size = Math.max(20, toNumber(listing.size_net || listing.size_gross || 100));
+        if (!price) {
+            alert('İlan fiyatı geçersiz görünüyor.');
+            return;
+        }
+
+        // 2. Base market source
+        const locationInfo = parseLocation(listing.location);
+        const listingNeighborhood = locationInfo.neighborhood;
+        const listingDistrict = locationInfo.district;
+        const listingNeighborhoodNorm = normalizeText(listingNeighborhood);
+        const listingDistrictNorm = normalizeText(listingDistrict);
+
+        let marketAvg = 25000;
+        let neighborhood = listingNeighborhood || '';
         let dataSource = 'Genel Tahmin';
+        let locationCoverage = 'general';
 
-        // Find district and neighborhood from listing location
-        const districtMatch = Object.keys(this.marketData).find(d => listing.location.includes(d));
+        const districtKeys = Object.keys(this.marketData || {});
+        let districtMatch = districtKeys.find(d => normalizeText(d) === listingDistrictNorm);
+        if (!districtMatch) {
+            districtMatch = districtKeys.find(d => (listing.location || '').includes(d)) || '';
+        }
+
         if (districtMatch) {
-            neighborhood = districtMatch;
             const districtData = this.marketData[districtMatch];
-            marketAvg = districtData.avg;
+            marketAvg = districtData.avg || marketAvg;
             dataSource = `${districtMatch} Ortalaması`;
+            locationCoverage = 'district';
 
             if (districtData.neighborhoods) {
-                const neighName = Object.keys(districtData.neighborhoods).find(n => listing.location.includes(n));
+                const neighName = Object.keys(districtData.neighborhoods).find(n => normalizeText(n) === listingNeighborhoodNorm);
                 if (neighName) {
                     marketAvg = districtData.neighborhoods[neighName];
                     neighborhood = neighName;
-                    dataSource = `${neighName} Ortalaması`;
+                    dataSource = `${neighborhood} Ortalaması`;
+                    locationCoverage = 'neighborhood';
                 }
             }
         }
 
-        // PRIORITY: Use SOLD listings from EXACT SAME neighborhood only (no district fallback)
+        // 3. Sold comparables - strict normalized neighborhood + robust statistics
         let usingSoldData = false;
         let soldDataAge = null;
         let soldDataSite = null;
         let soldDataKitchen = null;
         let soldDataDeed = null;
+        let volatility = 0;
+        let soldComparableCount = 0;
+        let soldComparableRawCount = 0;
+        let soldOutlierRemoved = 0;
+        let soldMedianAgeDays = null;
 
-        const soldListings = this.data.listings.filter(l =>
-            l.status === 'sold' &&
-            l.final_price &&
-            l.location &&
-            listing.location &&
-            neighborhood && // STRICT: Only if we have a specific neighborhood
-            l.location.includes(neighborhood) // Must match exact neighborhood
-        );
+        const soldCandidatesRaw = (this.data.listings || []).filter(l => {
+            if (l.status !== 'sold' || !l.final_price || !l.location) return false;
+            const soldLoc = parseLocation(l.location);
+            return listingNeighborhoodNorm &&
+                normalizeText(soldLoc.neighborhood) === listingNeighborhoodNorm;
+        }).map(sold => {
+            const soldSize = Math.max(20, toNumber(sold.size_net || sold.size_gross || 100));
+            const soldPrice = toNumber(sold.final_price);
+            const unitPrice = soldSize > 0 ? soldPrice / soldSize : 0;
+            const soldDate = sold.status_date || sold.date || null;
+            return { sold, unitPrice, soldDate };
+        }).filter(x => x.unitPrice > 0);
 
-        if (soldListings.length > 0) {
+        soldComparableRawCount = soldCandidatesRaw.length;
+
+        let soldCandidates = [...soldCandidatesRaw];
+        if (soldCandidates.length >= 4) {
+            const units = soldCandidates.map(x => x.unitPrice);
+            const q1 = quantile(units, 0.25);
+            const q3 = quantile(units, 0.75);
+            const iqr = q3 - q1;
+            const lower = q1 - 1.5 * iqr;
+            const upper = q3 + 1.5 * iqr;
+            const iqrFiltered = soldCandidates.filter(x => x.unitPrice >= lower && x.unitPrice <= upper);
+            if (iqrFiltered.length >= Math.max(3, Math.ceil(soldCandidates.length * 0.5))) {
+                soldCandidates = iqrFiltered;
+            }
+        }
+
+        if (soldCandidates.length > 0) {
             usingSoldData = true;
-            // Calculate average price per m² from sold listings
-            let totalUnitPrice = 0;
-            soldListings.forEach(sold => {
-                const soldSize = parseInt(sold.size_net || sold.size_gross || 100);
-                const soldPrice = parseInt(sold.final_price);
-                totalUnitPrice += soldPrice / soldSize;
-            });
-            marketAvg = Math.round(totalUnitPrice / soldListings.length);
-            dataSource = `${neighborhood} Satış Verisi (${soldListings.length} satış)`;
+            soldComparableCount = soldCandidates.length;
+            soldOutlierRemoved = soldComparableRawCount - soldComparableCount;
 
-            // Track characteristics of sold listings to avoid double-counting
-            // If most sold listings have similar age/site, we skip those adjustments
-            const soldAges = soldListings.map(s => s.building_age).filter(a => a);
-            const soldSites = soldListings.map(s => s.site_features).filter(s => s);
-            const soldKitchens = soldListings.map(s => s.kitchen).filter(k => k);
-            const soldDeeds = soldListings.map(s => s.deed_status).filter(d => d);
-            if (soldAges.length > 0) soldDataAge = soldAges[0]; // Most recent sold
-            if (soldSites.length > 0) soldDataSite = soldSites[0];
-            if (soldKitchens.length > 0) soldDataKitchen = soldKitchens[0];
-            if (soldDeeds.length > 0) soldDataDeed = soldDeeds[0];
+            const units = soldCandidates.map(x => x.unitPrice);
+            marketAvg = Math.round(median(units));
+            volatility = marketAvg > 0 ? (stdDev(units) / marketAvg) : 0;
+            dataSource = `${listingNeighborhood || neighborhood} Satış Verisi (${soldComparableCount} satış)`;
+            if (soldOutlierRemoved > 0) dataSource += `, ${soldOutlierRemoved} aykırı dışlandı`;
+            locationCoverage = 'sold_neighborhood';
+
+            const soldAges = soldCandidates.map(x => x.sold.building_age).filter(Boolean);
+            const soldSites = soldCandidates.map(x => x.sold.site_features).filter(Boolean);
+            const soldKitchens = soldCandidates.map(x => x.sold.kitchen).filter(Boolean);
+            const soldDeeds = soldCandidates.map(x => x.sold.deed_status).filter(Boolean);
+            soldDataAge = modeValue(soldAges);
+            soldDataSite = modeValue(soldSites);
+            soldDataKitchen = modeValue(soldKitchens);
+            soldDataDeed = modeValue(soldDeeds);
+
+            const validAgeDays = soldCandidates.map(x => daysSince(x.soldDate)).filter(v => v !== null && v >= 0);
+            if (validAgeDays.length > 0) {
+                soldMedianAgeDays = median(validAgeDays);
+            }
         }
 
         // Start with base value
@@ -709,23 +814,59 @@ const app = {
         }
         estimatedValue *= interiorMultiplier;
 
-        // 4. Final Comparison
+        // 4. Confidence + dynamic thresholds + final comparison
+        estimatedValue = Math.max(1, estimatedValue);
         const diff = price - estimatedValue;
         const diffPercent = (diff / estimatedValue) * 100;
+
+        const featureFields = [
+            listing.building_age,
+            listing.floor_current,
+            listing.floor_total,
+            listing.site_features,
+            listing.damage,
+            listing.deed_status,
+            listing.kitchen,
+            listing.interior_condition,
+            listing.size_net || listing.size_gross
+        ];
+        const featureCompleteness = featureFields.filter(Boolean).length / featureFields.length;
+
+        const soldScore = usingSoldData ? Math.min(45, soldComparableCount * 7 + (soldComparableCount >= 5 ? 10 : 0)) : 0;
+        let recencyScore = 4;
+        if (soldMedianAgeDays !== null) {
+            if (soldMedianAgeDays <= 30) recencyScore = 25;
+            else if (soldMedianAgeDays <= 90) recencyScore = 20;
+            else if (soldMedianAgeDays <= 180) recencyScore = 14;
+            else if (soldMedianAgeDays <= 365) recencyScore = 8;
+        }
+        const coverageScore = locationCoverage === 'sold_neighborhood'
+            ? 15
+            : (locationCoverage === 'neighborhood' ? 12 : (locationCoverage === 'district' ? 8 : 4));
+        const featureScore = Math.round(featureCompleteness * 15);
+        const confidence = clamp(soldScore + recencyScore + coverageScore + featureScore, 0, 100);
+        const confidenceLabel = confidence >= 75 ? 'Yüksek' : (confidence >= 50 ? 'Orta' : 'Düşük');
+        const confidenceColor = confidence >= 75 ? '#166534' : (confidence >= 50 ? '#92400e' : '#991b1b');
+
+        const volatilityAdj = clamp(volatility * 100 * 0.5, 0, 8);
+        const confidenceAdj = clamp((70 - confidence) / 8, 0, 8);
+        const cheapThreshold = -15 - (volatilityAdj * 0.4) - (confidenceAdj * 0.6);
+        const fairUpperThreshold = 10 + volatilityAdj + confidenceAdj;
+        const highUpperThreshold = 25 + volatilityAdj + (confidenceAdj * 1.2);
 
         let status = '';
         let statusClass = '';
         let statusEmoji = '';
 
-        if (diffPercent < -15) {
+        if (diffPercent < cheapThreshold) {
             status = 'ÇOK UYGUN';
             statusEmoji = '🔥';
             statusClass = 'text-success';
-        } else if (diffPercent >= -15 && diffPercent <= 10) {
+        } else if (diffPercent >= cheapThreshold && diffPercent <= fairUpperThreshold) {
             status = 'PİYASA DEĞERİNDE';
             statusEmoji = '✅';
             statusClass = 'text-primary';
-        } else if (diffPercent > 10 && diffPercent <= 25) {
+        } else if (diffPercent > fairUpperThreshold && diffPercent <= highUpperThreshold) {
             status = 'BİRAZ YÜKSEK';
             statusEmoji = '⚖️';
             statusClass = 'text-warning';
@@ -767,6 +908,9 @@ const app = {
                     <div style="font-size:14px; color:#64748b; font-weight:normal; margin-top:5px;">
                         Fark: ${diff > 0 ? '+' : ''}${diff.toLocaleString('tr-TR')} TL
                     </div>
+                    <div style="font-size:12px; color:#64748b; margin-top:6px;">
+                        Sapma: ${diffPercent > 0 ? '+' : ''}${diffPercent.toFixed(2)}%
+                    </div>
                 </div>
 
                 <div style="background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:15px;">
@@ -779,10 +923,23 @@ const app = {
                         TAHMİNİ DEĞER: ${estimatedValue.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
                     </div>
                 </div>
+
+                <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px; margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; color:#78350f; font-weight:700;">Güven Skoru</span>
+                        <span style="font-size:13px; font-weight:800; color:${confidenceColor};">${confidence}/100 (${confidenceLabel})</span>
+                    </div>
+                    <div style="font-size:11px; color:#92400e; margin-top:6px;">
+                        Karşılaştırma: ${soldComparableCount}/${soldComparableRawCount || soldComparableCount} satış, veri yaşı: ${soldMedianAgeDays !== null ? Math.round(soldMedianAgeDays) + ' gün (medyan)' : 'bilinmiyor'}, volatilite: ${(volatility * 100).toFixed(1)}%
+                    </div>
+                    <div style="font-size:11px; color:#92400e; margin-top:4px;">
+                        Dinamik eşikler: Çok Uygun &lt; ${cheapThreshold.toFixed(1)}% • Piyasa ≤ ${fairUpperThreshold.toFixed(1)}% • Biraz Yüksek ≤ ${highUpperThreshold.toFixed(1)}%
+                    </div>
+                </div>
                 
                 <div style="background:#F0FDF4; border-left: 4px solid #10B981; padding: 10px; border-radius: 4px;">
                     <p style="color:#064E3B; font-size:12px; line-height:1.4; margin:0;">
-                    💡 Bu değerleme <strong>mahalle ortalaması</strong> üzerine kat, site özellikleri ve hasar durumu gibi faktörler değerlendirilerek hesaplanmıştır.
+                    💡 Bu değerleme <strong>robust medyan m² fiyatı</strong> (aykırı değer temizliği) üzerine kat, site özellikleri ve hasar durumu gibi faktörler değerlendirilerek hesaplanmıştır.
                     </p>
                 </div>
             </div>
@@ -1430,9 +1587,29 @@ const app = {
                 const district = document.getElementById('edit-listing-district').value;
                 const neighborhood = document.getElementById('edit-listing-neighborhood').value;
                 const location = `${neighborhood}, ${district}, Adana`;
+                const parsePrice = (value) => {
+                    const digits = String(value || '').replace(/[^\d]/g, '');
+                    return digits ? parseInt(digits, 10) : 0;
+                };
+                const currentListing = this.data.listings[index];
+                const oldPrice = parsePrice(currentListing.price);
+                const newPrice = parsePrice(formData.get('price'));
+                const priceHistory = Array.isArray(currentListing.price_history) ? [...currentListing.price_history] : [];
+                if (oldPrice > 0 && newPrice > 0 && oldPrice !== newPrice) {
+                    const change = newPrice - oldPrice;
+                    priceHistory.push({
+                        old_price: oldPrice,
+                        new_price: newPrice,
+                        change: change,
+                        change_pct: oldPrice ? Number(((change / oldPrice) * 100).toFixed(2)) : 0,
+                        date: new Date().toISOString(),
+                        source: 'edit_listing_submit',
+                        note: change < 0 ? 'Fiyat düşürüldü' : 'Fiyat yükseltildi'
+                    });
+                }
 
                 const updatedListing = {
-                    ...this.data.listings[index],
+                    ...currentListing,
                     title: formData.get('title'),
                     price: formData.get('price').replace(/\./g, ''),
                     location: location,
@@ -1454,7 +1631,8 @@ const app = {
                     owner_name: formData.get('owner_name'),
                     owner_phone: formData.get('owner_phone'),
                     description: formData.get('description'),
-                    external_link: formData.get('external_link')
+                    external_link: formData.get('external_link'),
+                    price_history: priceHistory
                 };
 
                 this.data.listings[index] = updatedListing;
@@ -2095,7 +2273,7 @@ const app = {
                             <div class="listing-actions">
                                 <button class="btn btn-primary btn-block" onclick="app.openGallery(${listing.id})">İncele</button>
                                 ${lockBtnHtml}
-                                <button class="btn btn-secondary" onclick="app.evaluateListing(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #7C3AED; background: #EDE9FE; border-color: #DDD6FE;" title="Gemini Değerleme"><i class="ph ph-sparkle"></i></button>
+                                <button class="btn btn-secondary" onclick="app.evaluateListing(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #7C3AED; background: #EDE9FE; border-color: #DDD6FE;" title="Akıllı Değerleme"><i class="ph ph-sparkle"></i></button>
                                 <button class="btn btn-secondary" onclick="app.openEditListingModal(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px;"><i class="ph ph-pencil-simple"></i></button>
                                 <button class="btn btn-secondary" onclick="app.deleteListing(${listing.id})" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px; color: #DC2626; background: #FEF2F2; border-color: #FECACA;"><i class="ph ph-trash"></i></button>
                                 ${listing.external_link && listing.status === 'active' ? `<a href="${listing.external_link}" target="_blank" class="btn btn-secondary" style="width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; margin-left: 5px;" title="İlana Git"><i class="ph ph-link"></i></a>` : ''}
@@ -2159,8 +2337,24 @@ const app = {
         // Populate Details
         const detailsContainer = document.getElementById('gallery-listing-details');
         if (detailsContainer) {
+            const history = Array.isArray(listing.price_history) ? listing.price_history : [];
+            const latestChange = history
+                .filter(h => Number(h.old_price || 0) > 0 && Number(h.new_price || 0) > 0 && Number(h.old_price) !== Number(h.new_price))
+                .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))[0];
+            let priceHistoryRow = '<div><span style="color:#666;">Son Fiyat Değişimi:</span> <b>-</b></div>';
+            if (latestChange) {
+                const oldPrice = Number(latestChange.old_price || 0);
+                const newPrice = Number(latestChange.new_price || 0);
+                const diff = newPrice - oldPrice;
+                const pct = oldPrice ? ((diff / oldPrice) * 100) : 0;
+                const sign = diff > 0 ? '+' : '';
+                const tone = diff < 0 ? '#991b1b' : '#166534';
+                const changeDate = latestChange.date ? new Date(latestChange.date).toLocaleDateString('tr-TR') : '-';
+                priceHistoryRow = `<div><span style="color:#666;">Son Fiyat Değişimi:</span> <b style="color:${tone};">${oldPrice.toLocaleString('tr-TR')} TL → ${newPrice.toLocaleString('tr-TR')} TL (${sign}${diff.toLocaleString('tr-TR')} TL, ${sign}${pct.toFixed(2)}%)</b> <span style="color:#6b7280; font-size:12px;">(${changeDate})</span></div>`;
+            }
             detailsContainer.innerHTML = `
                             <div><span style="color:#666;">Fiyat:</span> <b>${parseInt(listing.price).toLocaleString('tr-TR')} TL</b></div>
+                            ${priceHistoryRow}
                             <div><span style="color:#666;">Konum:</span> <b>${listing.location}</b></div>
                             <div><span style="color:#666;">Oda:</span> <b>${listing.rooms}</b></div>
                             <div><span style="color:#666;">Brüt m²:</span> <b>${listing.size_gross}m²</b></div>
@@ -2680,7 +2874,6 @@ const app = {
                 const floorTag = item.floor_current ? `<span><i class="ph ph-stairs"></i> ${item.floor_current}. Kat</span>` : '';
                 const facadeTag = item.facade ? `<span><i class="ph ph-compass"></i> ${item.facade}</span>` : '';
                 const deedTag = item.deed_status ? `<span><i class="ph ph-file-text"></i> ${item.deed_status}</span>` : '';
-
                 // Compact Card HTML
                 return `
                             <div class="listing-card type-${item.type}" onclick="app.openGallery(${item.id})">
@@ -3470,6 +3663,26 @@ const app = {
         const district = document.getElementById('edit-listing-district').value;
         const neighborhood = document.getElementById('edit-listing-neighborhood').value;
         const location = `${neighborhood}, ${district}, Adana`;
+        const parsePrice = (value) => {
+            const digits = String(value || '').replace(/[^\d]/g, '');
+            return digits ? parseInt(digits, 10) : 0;
+        };
+        const currentListing = this.data.listings[index];
+        const oldPrice = parsePrice(currentListing.price);
+        const newPrice = parsePrice(formData.get('price'));
+        const priceHistory = Array.isArray(currentListing.price_history) ? [...currentListing.price_history] : [];
+        if (oldPrice > 0 && newPrice > 0 && oldPrice !== newPrice) {
+            const change = newPrice - oldPrice;
+            priceHistory.push({
+                old_price: oldPrice,
+                new_price: newPrice,
+                change: change,
+                change_pct: oldPrice ? Number(((change / oldPrice) * 100).toFixed(2)) : 0,
+                date: new Date().toISOString(),
+                source: 'edit_listing',
+                note: change < 0 ? 'Fiyat düşürüldü' : 'Fiyat yükseltildi'
+            });
+        }
 
         // DEBUG: Form değerlerini kontrol et
         console.log('=== SAVE EDIT LISTING DEBUG ===');
@@ -3478,7 +3691,7 @@ const app = {
         console.log('OLD interior_condition:', this.data.listings[index].interior_condition);
 
         const updatedListing = {
-            ...this.data.listings[index],
+            ...currentListing,
             title: formData.get('title'),
             price: formData.get('price').replace(/\./g, ''),
             location: location,
@@ -3500,7 +3713,8 @@ const app = {
             owner_name: formData.get('owner_name'),
             owner_phone: formData.get('owner_phone'),
             description: formData.get('description'),
-            external_link: formData.get('external_link')
+            external_link: formData.get('external_link'),
+            price_history: priceHistory
         };
 
         console.log('NEW interior_condition:', updatedListing.interior_condition);
@@ -3667,12 +3881,165 @@ const app = {
             if (elOwners) elOwners.textContent = owners;
             if (elFindings) elFindings.textContent = (this.data.findings || []).length;
 
+            // Render price changes panel (urgent drops first)
+            this.renderPriceChangesPanel();
+
             // Render neighborhood stats
             this.renderNeighborhoodStats();
 
         } catch (e) {
             console.error("Error updating stats:", e);
         }
+    },
+
+    renderPriceChangesPanel() {
+        const panel = document.querySelector('#dashboard .recent-listings');
+        if (!panel) return;
+        if (typeof this.priceChangesPanelCollapsed !== 'boolean') this.priceChangesPanelCollapsed = false;
+        if (!this.priceChangesFilter) this.priceChangesFilter = 'all';
+
+        const escapeHtml = (value) => String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const formatPrice = (value) => Number(value || 0).toLocaleString('tr-TR');
+
+        const allChanges = [];
+        (this.data.listings || []).forEach(listing => {
+            const history = Array.isArray(listing.price_history) ? listing.price_history : [];
+            history.forEach(entry => {
+                const oldPrice = Number(entry.old_price || 0);
+                const newPrice = Number(entry.new_price || 0);
+                if (oldPrice <= 0 || newPrice <= 0 || oldPrice === newPrice) return;
+
+                const change = newPrice - oldPrice;
+                const changePct = oldPrice ? (change / oldPrice) * 100 : 0;
+                const changeDate = entry.date ? new Date(entry.date) : new Date(0);
+                allChanges.push({
+                    listingId: listing.id,
+                    title: listing.title || 'İsimsiz İlan',
+                    location: listing.location || '-',
+                    oldPrice: oldPrice,
+                    newPrice: newPrice,
+                    change: change,
+                    changePct: changePct,
+                    changeDate: changeDate,
+                    isDrop: change < 0,
+                    isUrgentDrop: change < 0 && Math.abs(changePct) >= 5
+                });
+            });
+        });
+
+        if (allChanges.length === 0) {
+            panel.innerHTML = `
+                <h3>Fiyatı Değişenler</h3>
+                <div class="empty-state">Henüz fiyat değişimi yok.</div>
+            `;
+            return;
+        }
+
+        allChanges.sort((a, b) => {
+            if (a.isDrop !== b.isDrop) return a.isDrop ? -1 : 1;
+            if (a.isDrop && b.isDrop && a.isUrgentDrop !== b.isUrgentDrop) return a.isUrgentDrop ? -1 : 1;
+
+            const pctDiff = Math.abs(b.changePct) - Math.abs(a.changePct);
+            if (pctDiff !== 0) return pctDiff;
+
+            return b.changeDate - a.changeDate;
+        });
+
+        const latestChangeByListing = new Map();
+        allChanges.forEach(item => {
+            if (!latestChangeByListing.has(item.listingId)) {
+                latestChangeByListing.set(item.listingId, item);
+            }
+        });
+
+        const items = Array.from(latestChangeByListing.values()).slice(0, 8);
+        const dropCount = items.filter(i => i.isDrop).length;
+        const riseCount = items.length - dropCount;
+        const urgentCount = items.filter(i => i.isUrgentDrop).length;
+        const filter = this.priceChangesFilter || 'all';
+        const filteredItems = items.filter(item => {
+            if (filter === 'drop') return item.isDrop;
+            if (filter === 'rise') return !item.isDrop;
+            if (filter === 'urgent') return item.isUrgentDrop;
+            return true;
+        });
+        const activeChipStyle = 'font-size:11px; border:1px solid #cbd5e1; padding:4px 9px; border-radius:999px; cursor:pointer; background:#e2e8f0; color:#0f172a; font-weight:700;';
+        const chipStyle = 'font-size:11px; border:1px solid #e2e8f0; padding:4px 9px; border-radius:999px; cursor:pointer; background:#fff; color:#334155;';
+
+        const rows = filteredItems.map(item => {
+            const changePrefix = item.change > 0 ? '+' : '';
+            const tone = item.change < 0 ? '#b91c1c' : '#15803d';
+            const dotColor = item.change < 0 ? '#ef4444' : '#22c55e';
+            const urgency = item.isUrgentDrop
+                ? '<span style="font-size:10px; color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; padding:1px 6px; border-radius:999px; font-weight:700;">ACİL</span>'
+                : '';
+            const dateLabel = item.changeDate && !isNaN(item.changeDate)
+                ? item.changeDate.toLocaleDateString('tr-TR')
+                : '-';
+
+            return `
+                <div onclick="app.openGallery(${item.listingId})"
+                     style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; border-top:1px solid #eef2f7; padding:10px 2px; cursor:pointer;">
+                    <div style="min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                            <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; display:inline-block; flex-shrink:0;"></span>
+                            <span style="font-weight:600; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</span>
+                            ${urgency}
+                        </div>
+                        <div style="margin-top:3px; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.location)}</div>
+                        <div style="margin-top:4px; font-size:12px; color:#334155;">${formatPrice(item.oldPrice)} TL -> ${formatPrice(item.newPrice)} TL</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-weight:700; color:${tone}; font-size:13px;">${changePrefix}${formatPrice(item.change)} TL</div>
+                        <div style="font-size:12px; color:${tone};">${changePrefix}${item.changePct.toFixed(2)}%</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">${dateLabel}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const collapsed = this.priceChangesPanelCollapsed;
+        const chevron = collapsed ? 'ph-caret-down' : 'ph-caret-up';
+        const bodyContent = collapsed ? '' : `
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                <span onclick="event.stopPropagation(); app.setPriceChangesFilter('all')" style="${filter === 'all' ? activeChipStyle : chipStyle}">Tümü: ${items.length}</span>
+                <span onclick="event.stopPropagation(); app.setPriceChangesFilter('drop')" style="${filter === 'drop' ? activeChipStyle : chipStyle}">Düşen: ${dropCount}</span>
+                <span onclick="event.stopPropagation(); app.setPriceChangesFilter('rise')" style="${filter === 'rise' ? activeChipStyle : chipStyle}">Yükselen: ${riseCount}</span>
+                <span onclick="event.stopPropagation(); app.setPriceChangesFilter('urgent')" style="${filter === 'urgent' ? activeChipStyle : chipStyle}">Acil: ${urgentCount}</span>
+            </div>
+            <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:2px 10px;">
+                ${rows || '<div class="empty-state" style="padding:14px 0;">Bu filtrede kayıt yok.</div>'}
+            </div>
+        `;
+
+        panel.innerHTML = `
+            <div onclick="app.togglePriceChangesPanel()"
+                 style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; cursor:pointer; user-select:none;">
+                <h3 style="margin:0;">Fiyatı Değişenler</h3>
+                <span style="display:flex; align-items:center; gap:8px; color:#64748b; font-size:12px;">
+                    <span>${items.length} kayıt</span>
+                    <i class="ph ${chevron}" style="font-size:15px;"></i>
+                </span>
+            </div>
+            ${bodyContent}
+        `;
+    },
+
+    togglePriceChangesPanel() {
+        this.priceChangesPanelCollapsed = !this.priceChangesPanelCollapsed;
+        this.renderPriceChangesPanel();
+    },
+
+    setPriceChangesFilter(filter) {
+        const allowed = ['all', 'drop', 'rise', 'urgent'];
+        this.priceChangesFilter = allowed.includes(filter) ? filter : 'all';
+        this.priceChangesPanelCollapsed = false;
+        this.renderPriceChangesPanel();
     },
 
     renderNeighborhoodStats() {
@@ -3843,6 +4210,26 @@ app.addListing = function (formData) {
             const neighborhood = document.getElementById('listing-neighborhood').value;
             const street = formData.get('street') || '';
             const location = `${neighborhood}, ${district}, Adana`;
+            const parsePrice = (value) => {
+                const digits = String(value || '').replace(/[^\d]/g, '');
+                return digits ? parseInt(digits, 10) : 0;
+            };
+            const existingItem = editId ? targetArray.find(x => x.id == editId) : null;
+            const oldPrice = existingItem ? parsePrice(existingItem.price) : 0;
+            const newPrice = parsePrice(formData.get('price'));
+            const priceHistory = Array.isArray(existingItem?.price_history) ? [...existingItem.price_history] : [];
+            if (existingItem && oldPrice > 0 && newPrice > 0 && oldPrice !== newPrice) {
+                const change = newPrice - oldPrice;
+                priceHistory.push({
+                    old_price: oldPrice,
+                    new_price: newPrice,
+                    change: change,
+                    change_pct: oldPrice ? Number(((change / oldPrice) * 100).toFixed(2)) : 0,
+                    date: new Date().toISOString(),
+                    source: 'quick_add_edit',
+                    note: change < 0 ? 'Fiyat düşürüldü' : 'Fiyat yükseltildi'
+                });
+            }
 
             const newItem = {
                 id: editId ? Number(editId) : Date.now(),
@@ -3869,7 +4256,8 @@ app.addListing = function (formData) {
                 owner_name: formData.get('owner_name'),
                 owner_phone: formData.get('owner_phone'),
                 photos: finalPhotos,
-                date: editId ? (targetArray.find(x => x.id == editId) || {}).date : new Date().toISOString()
+                date: editId ? (targetArray.find(x => x.id == editId) || {}).date : new Date().toISOString(),
+                price_history: priceHistory
             };
 
             if (editId) {
