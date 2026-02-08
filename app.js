@@ -547,14 +547,30 @@ const app = {
         let sameBuildingBlendApplied = false;
         const listingStreetNorm = normalizeText(listing.street || '');
         const listingBuildingNorm = normalizeText(listing.building_name || '');
-        if (soldCandidates.length > 0 && (listingStreetNorm || listingBuildingNorm)) {
+        const listingTitleNorm = normalizeText(listing.title || '');
+        const buildingKeywords = ['plaza', 'rezidans', 'residence', 'apartman', 'apt', 'sitesi', 'site', 'blok', 'kule'];
+        const titleStopWords = new Set(['satilik', 'kiralik', 'daire', 'ofis', 'isyeri', 'ev', 'mahfesigmaz', 'mahfesigmazda', 'adana', 'mah', 'mh']);
+        const titleTokens = (txt) => normalizeText(txt)
+            .split(/\s+/)
+            .filter(t => t && t.length >= 3 && !titleStopWords.has(t) && !/^\d+$/.test(t) && !t.includes('+'));
+
+        if (soldCandidates.length > 0 && (listingStreetNorm || listingBuildingNorm || listingTitleNorm)) {
             const sameBuildingCandidates = soldCandidates.filter(x => {
                 const soldStreetNorm = normalizeText(x.sold.street || '');
                 const soldBuildingNorm = normalizeText(x.sold.building_name || '');
+                const soldTitleNorm = normalizeText(x.sold.title || '');
                 const byBuilding = listingBuildingNorm && soldBuildingNorm && listingBuildingNorm === soldBuildingNorm;
                 const byStreet = listingStreetNorm && soldStreetNorm && listingStreetNorm === soldStreetNorm;
+                let byTitle = false;
+                if (listingTitleNorm && soldTitleNorm) {
+                    const lTokens = titleTokens(listingTitleNorm);
+                    const sSet = new Set(titleTokens(soldTitleNorm));
+                    const sharedTokens = lTokens.filter(t => sSet.has(t));
+                    const hasBuildingCue = buildingKeywords.some(k => listingTitleNorm.includes(k) && soldTitleNorm.includes(k));
+                    byTitle = hasBuildingCue && sharedTokens.length >= 1;
+                }
                 const sizeSimilarity = Math.abs((x.soldSize - size) / size) <= 0.15;
-                return sizeSimilarity && (byBuilding || byStreet);
+                return sizeSimilarity && (byBuilding || byStreet || byTitle);
             });
 
             if (sameBuildingCandidates.length > 0) {
