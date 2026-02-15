@@ -6280,19 +6280,21 @@ app.renderTargetListings = function () {
                     <i class="ph ph-map-pin" style="color:#dc2626;"></i> ${item.address}
                 </div>
 
-                <div class="card-actions" style="display: flex; gap: 8px;">
-                    <button class="btn btn-sm btn-primary" onclick="app.openMapDirections('${item.address.replace(/\n/g, ' ')}')" style="flex:1; background-color:#dc2626; border-color:#dc2626;">
+                <div class="card-actions" style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; gap:8px; flex:1; min-width:0;">
+                    <button class="btn btn-sm btn-primary" onclick="app.openMapDirections('${item.address.replace(/\n/g, ' ')}')" style="flex:1; min-width:0; background-color:#dc2626; border-color:#dc2626;">
                         <i class="ph ph-navigation-arrow"></i> Yol Tarifi
                     </button>
                     ${item.link ? `
-                    <a href="${item.link}" target="_blank" class="btn btn-sm btn-secondary" style="flex:1;">
+                    <a href="${item.link}" target="_blank" class="btn btn-sm btn-secondary" style="flex:1; min-width:0;">
                         <i class="ph ph-link"></i> Link
                     </a>
                     ` : ''}
-                    <button class="btn btn-sm btn-icon" onclick="app.openEditTargetModal('${item.id}')" style="color: #1d4ed8; background: white; border: 1px solid #bfdbfe;">
-                        <i class="ph ph-pencil-simple"></i>
+                    </div>
+                    <button class="btn btn-sm btn-icon" onclick="app.openEditTargetModal('${item.id}')" title="Düzenle" style="width:34px; height:34px; flex:0 0 34px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
+                        <i class="ph ph-note-pencil"></i>
                     </button>
-                     <button class="btn btn-sm btn-icon" onclick="app.deleteTarget('${item.id}')" style="color: #ef4444; background: white; border: 1px solid #fecaca;">
+                     <button class="btn btn-sm btn-icon" onclick="app.deleteTarget('${item.id}')" title="Sil" style="width:34px; height:34px; flex:0 0 34px; color:#ef4444; background:#fff1f2; border:1px solid #fecaca; border-radius:8px;">
                         <i class="ph ph-trash"></i>
                     </button>
                 </div>
