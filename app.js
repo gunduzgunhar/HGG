@@ -1523,6 +1523,42 @@ const app = {
     // Debounced Firestore save to avoid too many writes
     firestoreSaveTimeout: null,
 
+    async buildCloudSyncData() {
+        const photosMap = await this.photoStore.getAllPhotos();
+        const dataCopy = JSON.parse(JSON.stringify({
+            listings: this.data.listings || [],
+            customers: this.data.customers || [],
+            appointments: this.data.appointments || [],
+            fsbo: this.data.fsbo || [],
+            findings: this.data.findings || [],
+            targets: this.data.targets || []
+        }));
+
+        const resolvePhotos = (items, photoField = 'photos') => {
+            if (!items) return;
+            items.forEach(item => {
+                if (photoField === 'photos' && item.photos && Array.isArray(item.photos)) {
+                    item.photos = item.photos.map(p => this.isPhotoRef(p) && photosMap[p] ? photosMap[p] : p);
+                }
+                if (photoField === 'photo' && item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
+                    item.photo = photosMap[item.photo];
+                }
+            });
+        };
+
+        resolvePhotos(dataCopy.listings, 'photos');
+        resolvePhotos(dataCopy.findings, 'photos');
+        resolvePhotos(dataCopy.fsbo, 'photos');
+        dataCopy.fsbo.forEach(item => {
+            if (item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
+                item.photo = photosMap[item.photo];
+            }
+        });
+        resolvePhotos(dataCopy.targets, 'photo');
+
+        return dataCopy;
+    },
+
     saveToFirestore(immediate = false) {
         if (!window.db) return;
 
@@ -1532,14 +1568,14 @@ const app = {
             try {
                 this.lastSaveTimestamp = Date.now();
                 this.lastSaveTime = this.lastSaveTimestamp;
+                const cloudData = await this.buildCloudSyncData();
                 await window.db.collection('emlak_data').doc(this.firestoreDocId).set({
-                    listings: this.data.listings || [],
-                    customers: this.data.customers || [],
-                    appointments: this.data.appointments || [],
-                    fsbo: this.data.fsbo || [],
-                    fsbo: this.data.fsbo || [],
-                    findings: this.data.findings || [],
-                    targets: this.data.targets || [],
+                    listings: cloudData.listings || [],
+                    customers: cloudData.customers || [],
+                    appointments: cloudData.appointments || [],
+                    fsbo: cloudData.fsbo || [],
+                    findings: cloudData.findings || [],
+                    targets: cloudData.targets || [],
                     lastUpdated: this.lastSaveTimestamp
                 });
                 console.log("Firestore saved successfully");
@@ -6018,6 +6054,80 @@ document.addEventListener('click', function (e) {
 
 // --- TARGET LISTINGS FEATURES ---
 app.targetPhoto = null;
+app.targetEditId = null;
+
+app.setTargetModalMode = function (isEdit) {
+    const modal = document.getElementById('modal-add-target');
+    if (!modal) return;
+    const titleEl = modal.querySelector('.modal-header h3');
+    const saveBtn = modal.querySelector('.form-actions .btn.btn-primary');
+    if (titleEl) titleEl.textContent = isEdit ? 'Hedef İlan Düzenle' : 'Yeni Hedef İlan Ekle';
+    if (saveBtn) saveBtn.textContent = isEdit ? 'Güncelle' : 'Kaydet';
+};
+
+app.resetTargetFormState = function () {
+    const form = document.getElementById('form-add-target');
+    if (form) form.reset();
+    this.targetEditId = null;
+    this.targetPhoto = null;
+    this.setTargetModalMode(false);
+    const preview = document.getElementById('target-photo-preview');
+    if (preview) preview.innerHTML = '';
+    const input = document.getElementById('target-photo-input');
+    if (input) input.value = '';
+    const pasteArea = document.getElementById('target-photo-paste-area');
+    if (pasteArea) pasteArea.style.display = '';
+    const neighborhoodSelect = document.getElementById('target-neighborhood');
+    if (neighborhoodSelect) neighborhoodSelect.innerHTML = '<option value="">Önce İlçe Seçin</option>';
+};
+
+app.openAddTargetModal = function () {
+    this.resetTargetFormState();
+    this.modals.open('add-target');
+};
+
+app.openEditTargetModal = async function (id) {
+    const item = (this.data.targets || []).find(x => x.id === id);
+    if (!item) return;
+
+    this.resetTargetFormState();
+    this.targetEditId = id;
+    this.targetPhoto = item.photo || null;
+    this.setTargetModalMode(true);
+
+    const form = document.getElementById('form-add-target');
+    if (!form) return;
+    form.elements.title.value = item.title || '';
+    form.elements.link.value = item.link || '';
+    form.elements.district.value = item.district || '';
+    this.onTargetDistrictChange();
+    form.elements.neighborhood.value = item.neighborhood || '';
+    form.elements.price.value = item.price || '';
+    form.elements.address.value = item.address || '';
+    form.elements.agent_note.value = item.agent_note || '';
+
+    if (item.photo) {
+        let previewSrc = item.photo;
+        if (this.isPhotoRef(item.photo)) {
+            previewSrc = this._photoCache[item.photo] || await this.photoStore.getPhoto(item.photo) || '';
+            if (previewSrc) this._photoCache[item.photo] = previewSrc;
+        }
+        if (previewSrc) {
+            const preview = document.getElementById('target-photo-preview');
+            if (preview) {
+                preview.innerHTML = `
+                    <div style="position:relative; display:inline-block;">
+                        <img src="${previewSrc}" style="width:100%; max-width:300px; height:140px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">
+                        <button onclick="event.stopPropagation(); app.removeTargetPhoto()" style="position:absolute; top:0; right:0; background:rgba(220,38,38,0.9); color:white; border:none; width:22px; height:22px; cursor:pointer; border-radius:0 0 0 4px;">&times;</button>
+                    </div>`;
+            }
+            const pasteArea = document.getElementById('target-photo-paste-area');
+            if (pasteArea) pasteArea.style.display = 'none';
+        }
+    }
+
+    this.modals.open('add-target');
+};
 
 app.handleTargetPhoto = function (input) {
     if (!input.files || !input.files[0]) return;
@@ -6090,9 +6200,12 @@ app.onTargetDistrictChange = function () {
 app.addTarget = function (formData) {
     const district = formData.get('district') || '';
     const neighborhood = formData.get('neighborhood') || '';
+    const existingIndex = this.targetEditId ? (this.data.targets || []).findIndex(x => x.id === this.targetEditId) : -1;
+    const existingItem = existingIndex > -1 ? this.data.targets[existingIndex] : null;
+    const nextPhoto = this.targetPhoto || null;
 
     const newItem = {
-        id: 'target_' + Date.now(),
+        id: existingItem ? existingItem.id : 'target_' + Date.now(),
         title: formData.get('title'),
         link: formData.get('link'),
         district: district,
@@ -6100,22 +6213,25 @@ app.addTarget = function (formData) {
         price: formData.get('price'),
         address: formData.get('address'),
         agent_note: formData.get('agent_note'),
-        photo: this.targetPhoto || null,
-        date: new Date().toISOString()
+        photo: nextPhoto,
+        date: existingItem ? (existingItem.date || new Date().toISOString()) : new Date().toISOString()
     };
 
     if (!this.data.targets) this.data.targets = [];
-    this.data.targets.push(newItem);
+    if (existingItem) {
+        const previousPhoto = existingItem.photo;
+        if (previousPhoto && this.isPhotoRef(previousPhoto) && previousPhoto !== nextPhoto) {
+            this.photoStore.deletePhotos([previousPhoto]);
+        }
+        this.data.targets[existingIndex] = newItem;
+    } else {
+        this.data.targets.push(newItem);
+    }
 
     this.saveData('targets');
     this.renderTargetListings();
     this.modals.closeAll();
-    document.getElementById('form-add-target').reset();
-    this.targetPhoto = null;
-    const preview = document.getElementById('target-photo-preview');
-    if (preview) preview.innerHTML = '';
-    const pasteArea = document.getElementById('target-photo-paste-area');
-    if (pasteArea) pasteArea.style.display = '';
+    this.resetTargetFormState();
 };
 
 app.deleteTarget = function (id) {
@@ -6173,6 +6289,9 @@ app.renderTargetListings = function () {
                         <i class="ph ph-link"></i> Link
                     </a>
                     ` : ''}
+                    <button class="btn btn-sm btn-icon" onclick="app.openEditTargetModal('${item.id}')" style="color: #1d4ed8; background: white; border: 1px solid #bfdbfe;">
+                        <i class="ph ph-pencil-simple"></i>
+                    </button>
                      <button class="btn btn-sm btn-icon" onclick="app.deleteTarget('${item.id}')" style="color: #ef4444; background: white; border: 1px solid #fecaca;">
                         <i class="ph ph-trash"></i>
                     </button>
