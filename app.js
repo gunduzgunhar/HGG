@@ -1546,17 +1546,14 @@ const app = {
                 }
                 this.firestoreLoaded = true;
 
-                // TARGETS: Her zaman cloud'dan çek (timestamp'e bakmadan)
+                // TARGETS: Her zaman cloud'dan çek (silme işlemleri yansısın)
                 try {
                     const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
                     if (targetsDoc.exists) {
                         const cloudTargets = targetsDoc.data().data || [];
-                        const localTargets = this.data.targets || [];
-                        const cloudTargetIds = new Set(cloudTargets.map(t => t.id));
-                        const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
-                        this.data.targets = [...cloudTargets, ...localOnlyTargets];
+                        this.data.targets = cloudTargets;
                         localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
-                        console.log(`Targets ilk yükleme: Cloud=${cloudTargets.length}, Local-only=${localOnlyTargets.length}`);
+                        console.log(`Targets ilk yükleme: Cloud=${cloudTargets.length}`);
                     }
                 } catch (e) {
                     console.error('Targets initial sync error:', e);
@@ -1627,17 +1624,8 @@ const app = {
                     this.data.fsbo = cloudData.fsbo;
                     this.data.findings = cloudData.findings;
 
-                    // Targets Merge
-                    const localTargets = this.data.targets || [];
-                    const cloudTargetIds = new Set(cloudData.targets.map(t => t.id));
-                    const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
-                    if (localOnlyTargets.length > 0) {
-                        console.log(`Targets Sync: ${localOnlyTargets.length} local kayıt korunuyor`);
-                        this.data.targets = [...cloudData.targets, ...localOnlyTargets];
-                        setTimeout(() => this.saveToFirestore(), 2000);
-                    } else {
-                        this.data.targets = cloudData.targets;
-                    }
+                    // Targets - cloud'u direkt al (silme işlemleri yansısın)
+                    this.data.targets = cloudData.targets;
 
                     // Tüm verileri localStorage'a kaydet
                     localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
@@ -1671,20 +1659,13 @@ const app = {
             const cloudTargets = doc.data().data || [];
             const localTargets = this.data.targets || [];
 
-            // Cloud'u her zaman al, local-only olanları koru
-            const cloudTargetIds = new Set(cloudTargets.map(t => t.id));
-            const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
-
-            // Yeni liste: cloud + local-only
-            const newTargets = [...cloudTargets, ...localOnlyTargets];
-
-            // Değişiklik var mı kontrol et
+            // Cloud'u direkt al - silme işlemleri de yansısın
             const oldIds = localTargets.map(t => t.id).sort().join(',');
-            const newIds = newTargets.map(t => t.id).sort().join(',');
+            const newIds = cloudTargets.map(t => t.id).sort().join(',');
 
-            if (oldIds !== newIds || cloudTargets.length !== localTargets.length - localOnlyTargets.length) {
-                console.log(`Targets Live Sync: Cloud=${cloudTargets.length}, Local-only=${localOnlyTargets.length}, Toplam=${newTargets.length}`);
-                this.data.targets = newTargets;
+            if (oldIds !== newIds) {
+                console.log(`Targets Live Sync: Cloud=${cloudTargets.length} (was ${localTargets.length})`);
+                this.data.targets = cloudTargets;
                 localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
                 if (typeof this.renderTargetListings === 'function') {
                     this.renderTargetListings();
