@@ -1447,7 +1447,7 @@ const app = {
                     console.log("Firestore (split format) loaded, cloud:", cloudTimestamp, "local:", localTimestamp);
 
                     if (cloudTimestamp > localTimestamp) {
-                        const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
+                        const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
                         const cloudData = {};
 
                         for (const key of collections) {
@@ -1477,7 +1477,8 @@ const app = {
                         const localOnlyFsbo = localFsbo.filter(f => !cloudFsboIds.has(f.id));
                         this.data.fsbo = localOnlyFsbo.length > 0 ? [...cloudData.fsbo, ...localOnlyFsbo] : cloudData.fsbo;
 
-                        // Targets - senkronizasyon dışı, sadece localStorage'da
+                        // Targets - soft delete ile senkronize
+                        this.data.targets = cloudData.targets || [];
 
                         // Update localStorage
                         localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
@@ -1485,6 +1486,7 @@ const app = {
                         localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments || []));
                         localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
                         localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
+                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
 
                         this.lastSaveTimestamp = cloudTimestamp;
                         localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1505,13 +1507,14 @@ const app = {
                             this.data.appointments = cloudData.appointments || [];
                             this.data.fsbo = cloudData.fsbo || [];
                             this.data.findings = cloudData.findings || [];
-                            // targets senkronizasyon dışı
+                            this.data.targets = cloudData.targets || [];
 
                             localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
                             localStorage.setItem('rea_customers', JSON.stringify(this.data.customers));
                             localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
                             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
                             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
+                            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
                             this.lastSaveTimestamp = cloudTimestamp;
                             localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1522,8 +1525,18 @@ const app = {
                 }
                 this.firestoreLoaded = true;
 
-                // TARGETS: Senkronizasyon dışı - sadece localStorage'dan okunur
-                console.log(`Targets: localStorage'dan ${(this.data.targets || []).length} adet yüklendi (senkron dışı)`);
+                // TARGETS: Cloud'dan çek
+                try {
+                    const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
+                    if (targetsDoc.exists) {
+                        this.data.targets = targetsDoc.data().data || [];
+                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+                        const activeTargets = this.data.targets.filter(t => !t.deleted);
+                        console.log(`Targets: Cloud'dan ${activeTargets.length} aktif hedef yüklendi`);
+                    }
+                } catch (e) {
+                    console.error('Targets initial sync error:', e);
+                }
 
                 // Setup real-time listener for live sync
                 this.setupFirestoreListener();
@@ -1567,7 +1580,7 @@ const app = {
 
                 if (cloudTimestamp > localTimestamp) {
                     // Ayrı documentlerden oku
-                    const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
+                    const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
                     const cloudData = {};
 
                     for (const key of collections) {
@@ -1589,7 +1602,7 @@ const app = {
                     this.data.appointments = cloudData.appointments;
                     this.data.fsbo = cloudData.fsbo;
                     this.data.findings = cloudData.findings;
-                    // targets senkronizasyon dışı
+                    this.data.targets = cloudData.targets;
 
                     // Tüm verileri localStorage'a kaydet
                     localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
@@ -1597,6 +1610,7 @@ const app = {
                     localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
                     localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
                     localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
+                    localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
                     // Listener'dan gelen veri tekrar Firestore'a yazılmasın
                     this.lastListenerUpdate = Date.now();
@@ -1631,7 +1645,7 @@ const app = {
         }
 
         try {
-            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
             const cloudData = {};
 
             for (const key of collections) {
@@ -1648,7 +1662,7 @@ const app = {
             this.data.appointments = cloudData.appointments;
             this.data.fsbo = cloudData.fsbo;
             this.data.findings = cloudData.findings;
-            // targets senkronizasyon dışı - localStorage'dan okunur
+            this.data.targets = cloudData.targets;
 
             // localStorage'a kaydet
             localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
@@ -1656,6 +1670,7 @@ const app = {
             localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
+            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
             this.lastSaveTimestamp = cloudTimestamp;
             localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1664,7 +1679,8 @@ const app = {
             this.renderAll();
             this.updateStats();
 
-            alert(`Buluttan çekildi!\nİlanlar: ${this.data.listings.length}\nMüşteriler: ${this.data.customers.length}`);
+            const activeTargets = (this.data.targets || []).filter(t => !t.deleted);
+            alert(`Buluttan çekildi!\nHedefler: ${activeTargets.length}\nİlanlar: ${this.data.listings.length}`);
         } catch (error) {
             console.error('ForceSync error:', error);
             alert('Senkronizasyon hatası: ' + error.message);
@@ -1767,7 +1783,7 @@ const app = {
             this.lastSaveTimestamp = Date.now();
             this.lastSaveTime = this.lastSaveTimestamp;
             const cloudData = await this.buildCloudSyncData();
-            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
 
             // Her kategoriyi AYRI AYRI kaydet - biri başarısız olsa bile diğerleri kaydedilsin
             let successCount = 0;
@@ -6483,14 +6499,12 @@ app.addTarget = function (formData) {
 
 app.deleteTarget = function (id) {
     if (confirm('Bu hedef ilanı silmek istediğinize emin misiniz?')) {
-        // Sync lock - cloud güncellemelerini engelle
-        this.syncLock = true;
-        setTimeout(() => { this.syncLock = false; }, 3000);
+        // Soft delete - silmek yerine deleted=true işaretle
         const item = this.data.targets.find(x => x.id === id);
-        if (item && item.photo && this.isPhotoRef(item.photo)) {
-            this.photoStore.deletePhotos([item.photo]);
+        if (item) {
+            item.deleted = true;
+            item.deletedAt = Date.now();
         }
-        this.data.targets = this.data.targets.filter(x => x.id !== id);
         this.saveData('targets');
         this.saveToFirestore(true);
         this.renderTargetListings();
@@ -6501,7 +6515,10 @@ app.renderTargetListings = function () {
     const list = document.getElementById('targets-grid');
     if (!list) return;
 
-    if (!this.data.targets || this.data.targets.length === 0) {
+    // Silinmemiş hedefleri filtrele
+    const activeTargets = (this.data.targets || []).filter(t => !t.deleted);
+
+    if (activeTargets.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
                 <i class="ph ph-crosshair"></i>
@@ -6510,7 +6527,7 @@ app.renderTargetListings = function () {
         return;
     }
 
-    list.innerHTML = this.data.targets.slice().reverse().map(item => `
+    list.innerHTML = activeTargets.slice().reverse().map(item => `
         <div class="listing-card target-card" style="border: 1px solid #fecaca; background: #fff5f5;">
             <div class="card-badges" style="position:absolute; top:10px; right:10px;">
                  <span class="badge" style="background:#dc2626; color:white;">HEDEF</span>
