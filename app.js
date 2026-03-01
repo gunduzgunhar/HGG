@@ -1349,6 +1349,7 @@ const app = {
             this.lastSaveTimestamp = localTimestamp;
 
             // Then load from Firestore (cloud sync)
+            console.log("Firebase durumu:", window.db ? "DB VAR" : "DB YOK", window.auth?.currentUser ? "GİRİŞ YAPILMIŞ: " + window.auth.currentUser.email : "GİRİŞ YOK");
             if (window.db) {
                 // Yeni format: ayrı documentler mi kontrol et
                 const metaDoc = await window.db.collection('emlak_data').doc('meta').get();
@@ -1410,7 +1411,20 @@ const app = {
                             setTimeout(() => this.saveToFirestore(), 2000);
                         }
                     } else {
-                        console.log("Local veri daha güncel, Firestore'a yükleniyor...");
+                        console.log("Local veri daha güncel, ama yine de targets senkronize ediliyor...");
+                        // Timestamp düşük olsa bile targets'ı cloud'dan çek ve merge et
+                        const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
+                        if (targetsDoc.exists) {
+                            const cloudTargets = targetsDoc.data().data || [];
+                            const localTargets = this.data.targets || [];
+                            const localTargetIds = new Set(localTargets.map(t => t.id));
+                            const cloudOnlyTargets = cloudTargets.filter(t => !localTargetIds.has(t.id));
+                            if (cloudOnlyTargets.length > 0) {
+                                console.log(`Targets Sync: ${cloudOnlyTargets.length} cloud kayıt ekleniyor`);
+                                this.data.targets = [...localTargets, ...cloudOnlyTargets];
+                                localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+                            }
+                        }
                         setTimeout(() => this.saveToFirestore(), 1000);
                     }
                 } else {
@@ -1444,6 +1458,22 @@ const app = {
                     }
                 }
                 this.firestoreLoaded = true;
+
+                // TARGETS: Her zaman cloud'dan çek (timestamp'e bakmadan)
+                try {
+                    const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
+                    if (targetsDoc.exists) {
+                        const cloudTargets = targetsDoc.data().data || [];
+                        const localTargets = this.data.targets || [];
+                        const cloudTargetIds = new Set(cloudTargets.map(t => t.id));
+                        const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
+                        this.data.targets = [...cloudTargets, ...localOnlyTargets];
+                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+                        console.log(`Targets ilk yükleme: Cloud=${cloudTargets.length}, Local-only=${localOnlyTargets.length}`);
+                    }
+                } catch (e) {
+                    console.error('Targets initial sync error:', e);
+                }
 
                 // Setup real-time listener for live sync
                 this.setupFirestoreListener();
@@ -1522,6 +1552,14 @@ const app = {
                         this.data.targets = cloudData.targets;
                     }
 
+                    // Tüm verileri localStorage'a kaydet
+                    localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
+                    localStorage.setItem('rea_customers', JSON.stringify(this.data.customers));
+                    localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
+                    localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
+                    localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
+                    localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+
                     this.lastSaveTimestamp = cloudTimestamp;
                     localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
                     this.normalizeLoadedData();
@@ -1532,10 +1570,97 @@ const app = {
                 }
             }
         });
+
+        // Targets için ayrı listener - HER ZAMAN ÇALIŞIR
+        window.db.collection('emlak_data').doc('targets').onSnapshot((doc) => {
+            if (!doc.exists) return;
+
+            // syncLock aktifse (kendi kayıtlarımız) atla
+            if (this.syncLock) {
+                console.log("Targets sync skipped - syncLock active");
+                return;
+            }
+
+            const cloudTargets = doc.data().data || [];
+            const localTargets = this.data.targets || [];
+
+            // Cloud'u her zaman al, local-only olanları koru
+            const cloudTargetIds = new Set(cloudTargets.map(t => t.id));
+            const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
+
+            // Yeni liste: cloud + local-only
+            const newTargets = [...cloudTargets, ...localOnlyTargets];
+
+            // Değişiklik var mı kontrol et
+            const oldIds = localTargets.map(t => t.id).sort().join(',');
+            const newIds = newTargets.map(t => t.id).sort().join(',');
+
+            if (oldIds !== newIds || cloudTargets.length !== localTargets.length - localOnlyTargets.length) {
+                console.log(`Targets Live Sync: Cloud=${cloudTargets.length}, Local-only=${localOnlyTargets.length}, Toplam=${newTargets.length}`);
+                this.data.targets = newTargets;
+                localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+                if (typeof this.renderTargetListings === 'function') {
+                    this.renderTargetListings();
+                }
+            }
+        });
     },
 
     lastSaveTimestamp: 0,
     lastSaveTime: 0,
+
+    async forceSync() {
+        if (!window.db) {
+            alert('Firestore bağlantısı yok!');
+            return;
+        }
+
+        if (!window.auth || !window.auth.currentUser) {
+            alert('Önce giriş yapmalısın! Sayfayı yenile ve giriş yap.');
+            return;
+        }
+
+        try {
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+            const cloudData = {};
+
+            for (const key of collections) {
+                const doc = await window.db.collection('emlak_data').doc(key).get();
+                cloudData[key] = doc.exists ? (doc.data().data || []) : [];
+            }
+
+            const metaDoc = await window.db.collection('emlak_data').doc('meta').get();
+            const cloudTimestamp = metaDoc.exists ? (metaDoc.data().lastUpdated || 0) : 0;
+
+            // Cloud verisini direkt al (timestamp kontrolü yok)
+            this.data.listings = cloudData.listings;
+            this.data.customers = cloudData.customers;
+            this.data.appointments = cloudData.appointments;
+            this.data.fsbo = cloudData.fsbo;
+            this.data.findings = cloudData.findings;
+            this.data.targets = cloudData.targets;
+
+            // localStorage'a kaydet
+            localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
+            localStorage.setItem('rea_customers', JSON.stringify(this.data.customers));
+            localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
+            localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
+            localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
+            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
+
+            this.lastSaveTimestamp = cloudTimestamp;
+            localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
+
+            this.normalizeLoadedData();
+            this.renderAll();
+            this.updateStats();
+
+            alert(`Buluttan çekildi!\nHedefler: ${this.data.targets.length}\nİlanlar: ${this.data.listings.length}`);
+        } catch (error) {
+            console.error('ForceSync error:', error);
+            alert('Senkronizasyon hatası: ' + error.message);
+        }
+    },
 
     saveData(key) {
         try {
@@ -1573,7 +1698,8 @@ const app = {
     firestoreSaveTimeout: null,
 
     async buildCloudSyncData() {
-        const photosMap = await this.photoStore.getAllPhotos();
+        // Firestore'a FOTOĞRAF GÖNDERMİYORUZ - sadece referanslar veya boş
+        // Fotoğraflar her cihazın kendi IndexedDB'sinde kalır
         const dataCopy = JSON.parse(JSON.stringify({
             listings: this.data.listings || [],
             customers: this.data.customers || [],
@@ -1583,27 +1709,32 @@ const app = {
             targets: this.data.targets || []
         }));
 
-        const resolvePhotos = (items, photoField = 'photos') => {
+        // Base64 fotoğrafları kaldır, sadece referansları koru
+        const stripBase64Photos = (items, photoField = 'photos') => {
             if (!items) return;
             items.forEach(item => {
                 if (photoField === 'photos' && item.photos && Array.isArray(item.photos)) {
-                    item.photos = item.photos.map(p => this.isPhotoRef(p) && photosMap[p] ? photosMap[p] : p);
+                    // Base64 olanları kaldır, referansları koru
+                    item.photos = item.photos.filter(p => p && !p.startsWith('data:'));
                 }
-                if (photoField === 'photo' && item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
-                    item.photo = photosMap[item.photo];
+                if (photoField === 'photo' && item.photo) {
+                    // Base64 ise null yap, referans ise koru
+                    if (item.photo.startsWith('data:')) {
+                        item.photo = null;
+                    }
                 }
             });
         };
 
-        resolvePhotos(dataCopy.listings, 'photos');
-        resolvePhotos(dataCopy.findings, 'photos');
-        resolvePhotos(dataCopy.fsbo, 'photos');
+        stripBase64Photos(dataCopy.listings, 'photos');
+        stripBase64Photos(dataCopy.findings, 'photos');
+        stripBase64Photos(dataCopy.fsbo, 'photos');
         dataCopy.fsbo.forEach(item => {
-            if (item.photo && this.isPhotoRef(item.photo) && photosMap[item.photo]) {
-                item.photo = photosMap[item.photo];
+            if (item.photo && item.photo.startsWith('data:')) {
+                item.photo = null;
             }
         });
-        resolvePhotos(dataCopy.targets, 'photo');
+        stripBase64Photos(dataCopy.targets, 'photo');
 
         return dataCopy;
     },
@@ -1614,30 +1745,41 @@ const app = {
         clearTimeout(this.firestoreSaveTimeout);
 
         const performSave = async () => {
-            try {
-                this.lastSaveTimestamp = Date.now();
-                this.lastSaveTime = this.lastSaveTimestamp;
-                const cloudData = await this.buildCloudSyncData();
-                const batch = window.db.batch();
-                const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+            this.lastSaveTimestamp = Date.now();
+            this.lastSaveTime = this.lastSaveTimestamp;
+            const cloudData = await this.buildCloudSyncData();
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
 
-                // Her kategori için ayrı document
-                for (const key of collections) {
+            // Her kategoriyi AYRI AYRI kaydet - biri başarısız olsa bile diğerleri kaydedilsin
+            let successCount = 0;
+            let failedKeys = [];
+
+            for (const key of collections) {
+                try {
                     const docRef = window.db.collection('emlak_data').doc(key);
-                    batch.set(docRef, {
+                    await docRef.set({
                         data: cloudData[key] || [],
                         lastUpdated: this.lastSaveTimestamp
                     });
+                    successCount++;
+                } catch (error) {
+                    console.error(`Firestore save error for ${key}:`, error.message);
+                    failedKeys.push(key);
                 }
+            }
 
-                // Meta document (genel timestamp)
+            // Meta document
+            try {
                 const metaRef = window.db.collection('emlak_data').doc('meta');
-                batch.set(metaRef, { lastUpdated: this.lastSaveTimestamp });
-
-                await batch.commit();
-                console.log("Firestore saved successfully (split documents)");
+                await metaRef.set({ lastUpdated: this.lastSaveTimestamp });
             } catch (error) {
-                console.error("Firestore save error:", error);
+                console.error("Meta save error:", error);
+            }
+
+            if (failedKeys.length > 0) {
+                console.warn(`Firestore: ${successCount}/${collections.length} kaydedildi. Başarısız: ${failedKeys.join(', ')}`);
+            } else {
+                console.log("Firestore saved successfully (all documents)");
             }
         };
 
@@ -2029,6 +2171,7 @@ const app = {
         this.renderAppointments();
         this.renderFindings();
         if (typeof this.renderFsboList === 'function') this.renderFsboList();
+        if (typeof this.renderTargetListings === 'function') this.renderTargetListings();
         this.updateStats();
         // Map is rendered when tab is activated
     },
@@ -5953,6 +6096,7 @@ app.importData = function (file) {
             const backupFsbo = imported.data.fsbo || [];
             const backupFindings = imported.data.findings || [];
             const backupAppointments = imported.data.appointments || [];
+            const backupTargets = imported.data.targets || [];
 
             // Count current items
             const currentListings = this.data.listings || [];
@@ -5960,8 +6104,9 @@ app.importData = function (file) {
             const currentFsbo = this.data.fsbo || [];
             const currentFindings = this.data.findings || [];
             const currentAppointments = this.data.appointments || [];
+            const currentTargets = this.data.targets || [];
 
-            if (confirm(`Yedek dosyasını birleştirmek istiyor musunuz?\n\nYedekteki veriler:\n- ${backupListings.length} ilan\n- ${backupCustomers.length} müşteri\n- ${backupFsbo.length} FSBO\n- ${backupFindings.length} bulum\n\nMevcut veriler:\n- ${currentListings.length} ilan\n- ${currentCustomers.length} müşteri\n- ${currentFsbo.length} FSBO\n- ${currentFindings.length} bulum\n\n✅ Yeni eklediğiniz veriler KORUNACAK!`)) {
+            if (confirm(`Yedek dosyasını birleştirmek istiyor musunuz?\n\nYedekteki veriler:\n- ${backupListings.length} ilan\n- ${backupCustomers.length} müşteri\n- ${backupFsbo.length} FSBO\n- ${backupFindings.length} bulum\n- ${backupTargets.length} hedef\n\nMevcut veriler:\n- ${currentListings.length} ilan\n- ${currentCustomers.length} müşteri\n- ${currentFsbo.length} FSBO\n- ${currentFindings.length} bulum\n- ${currentTargets.length} hedef\n\n✅ Yeni eklediğiniz veriler KORUNACAK!`)) {
 
                 // Merge function: add items from backup that don't exist in current
                 const mergeArrays = (current, backup) => {
@@ -5976,6 +6121,7 @@ app.importData = function (file) {
                 this.data.fsbo = mergeArrays(currentFsbo, backupFsbo);
                 this.data.findings = mergeArrays(currentFindings, backupFindings);
                 this.data.appointments = mergeArrays(currentAppointments, backupAppointments);
+                this.data.targets = mergeArrays(currentTargets, backupTargets);
 
                 // Save all
                 this.saveData('listings');
@@ -5983,6 +6129,7 @@ app.importData = function (file) {
                 this.saveData('fsbo');
                 this.saveData('findings');
                 this.saveData('appointments');
+                this.saveData('targets');
 
                 // Import edilen fotoğrafları IndexedDB'ye taşı
                 localStorage.removeItem('rea_photos_migrated');
@@ -5994,12 +6141,14 @@ app.importData = function (file) {
                     const addedListings = this.data.listings.length - currentListings.length;
                     const addedCustomers = this.data.customers.length - currentCustomers.length;
                     const addedFsbo = this.data.fsbo.length - currentFsbo.length;
+                    const addedTargets = this.data.targets.length - currentTargets.length;
 
                     alert(`Veriler başarıyla birleştirildi!\n\n` +
                         `Eklenen:\n` +
                         `+ ${addedListings} yeni ilan\n` +
                         `+ ${addedCustomers} yeni müşteri\n` +
-                        `+ ${addedFsbo} yeni FSBO`);
+                        `+ ${addedFsbo} yeni FSBO\n` +
+                        `+ ${addedTargets} yeni hedef`);
                 });
             }
         } catch (err) {
@@ -6290,6 +6439,7 @@ app.addTarget = function (formData) {
     }
 
     this.saveData('targets');
+    console.log("Target kaydedildi, Firestore'a gönderiliyor...", window.db ? "DB VAR" : "DB YOK!");
     this.saveToFirestore(true);
     this.renderTargetListings();
     this.modals.closeAll();
