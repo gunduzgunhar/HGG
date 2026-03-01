@@ -1447,7 +1447,7 @@ const app = {
                     console.log("Firestore (split format) loaded, cloud:", cloudTimestamp, "local:", localTimestamp);
 
                     if (cloudTimestamp > localTimestamp) {
-                        const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+                        const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
                         const cloudData = {};
 
                         for (const key of collections) {
@@ -1477,11 +1477,7 @@ const app = {
                         const localOnlyFsbo = localFsbo.filter(f => !cloudFsboIds.has(f.id));
                         this.data.fsbo = localOnlyFsbo.length > 0 ? [...cloudData.fsbo, ...localOnlyFsbo] : cloudData.fsbo;
 
-                        // Targets Merge
-                        const localTargets = this.data.targets || [];
-                        const cloudTargetIds = new Set(cloudData.targets.map(t => t.id));
-                        const localOnlyTargets = localTargets.filter(t => !cloudTargetIds.has(t.id));
-                        this.data.targets = localOnlyTargets.length > 0 ? [...cloudData.targets, ...localOnlyTargets] : cloudData.targets;
+                        // Targets - senkronizasyon dışı, sadece localStorage'da
 
                         // Update localStorage
                         localStorage.setItem('rea_listings', JSON.stringify(this.data.listings || []));
@@ -1489,7 +1485,6 @@ const app = {
                         localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments || []));
                         localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
                         localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
-                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
 
                         this.lastSaveTimestamp = cloudTimestamp;
                         localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1510,14 +1505,13 @@ const app = {
                             this.data.appointments = cloudData.appointments || [];
                             this.data.fsbo = cloudData.fsbo || [];
                             this.data.findings = cloudData.findings || [];
-                            this.data.targets = cloudData.targets || [];
+                            // targets senkronizasyon dışı
 
                             localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
                             localStorage.setItem('rea_customers', JSON.stringify(this.data.customers));
                             localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
                             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
                             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
-                            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
                             this.lastSaveTimestamp = cloudTimestamp;
                             localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1528,18 +1522,8 @@ const app = {
                 }
                 this.firestoreLoaded = true;
 
-                // TARGETS: Her zaman cloud'dan çek (silme işlemleri yansısın)
-                try {
-                    const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
-                    if (targetsDoc.exists) {
-                        const cloudTargets = targetsDoc.data().data || [];
-                        this.data.targets = cloudTargets;
-                        localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
-                        console.log(`Targets ilk yükleme: Cloud=${cloudTargets.length}`);
-                    }
-                } catch (e) {
-                    console.error('Targets initial sync error:', e);
-                }
+                // TARGETS: Senkronizasyon dışı - sadece localStorage'dan okunur
+                console.log(`Targets: localStorage'dan ${(this.data.targets || []).length} adet yüklendi (senkron dışı)`);
 
                 // Setup real-time listener for live sync
                 this.setupFirestoreListener();
@@ -1583,7 +1567,7 @@ const app = {
 
                 if (cloudTimestamp > localTimestamp) {
                     // Ayrı documentlerden oku
-                    const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+                    const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
                     const cloudData = {};
 
                     for (const key of collections) {
@@ -1605,9 +1589,7 @@ const app = {
                     this.data.appointments = cloudData.appointments;
                     this.data.fsbo = cloudData.fsbo;
                     this.data.findings = cloudData.findings;
-
-                    // Targets - cloud'u direkt al (silme işlemleri yansısın)
-                    this.data.targets = cloudData.targets;
+                    // targets senkronizasyon dışı
 
                     // Tüm verileri localStorage'a kaydet
                     localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
@@ -1615,7 +1597,6 @@ const app = {
                     localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
                     localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
                     localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
-                    localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
                     // Listener'dan gelen veri tekrar Firestore'a yazılmasın
                     this.lastListenerUpdate = Date.now();
@@ -1650,7 +1631,7 @@ const app = {
         }
 
         try {
-            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
             const cloudData = {};
 
             for (const key of collections) {
@@ -1667,7 +1648,7 @@ const app = {
             this.data.appointments = cloudData.appointments;
             this.data.fsbo = cloudData.fsbo;
             this.data.findings = cloudData.findings;
-            this.data.targets = cloudData.targets;
+            // targets senkronizasyon dışı - localStorage'dan okunur
 
             // localStorage'a kaydet
             localStorage.setItem('rea_listings', JSON.stringify(this.data.listings));
@@ -1675,7 +1656,6 @@ const app = {
             localStorage.setItem('rea_appointments', JSON.stringify(this.data.appointments));
             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo));
             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
-            localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
             this.lastSaveTimestamp = cloudTimestamp;
             localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1684,7 +1664,7 @@ const app = {
             this.renderAll();
             this.updateStats();
 
-            alert(`Buluttan çekildi!\nHedefler: ${this.data.targets.length}\nİlanlar: ${this.data.listings.length}`);
+            alert(`Buluttan çekildi!\nİlanlar: ${this.data.listings.length}\nMüşteriler: ${this.data.customers.length}`);
         } catch (error) {
             console.error('ForceSync error:', error);
             alert('Senkronizasyon hatası: ' + error.message);
@@ -1787,7 +1767,7 @@ const app = {
             this.lastSaveTimestamp = Date.now();
             this.lastSaveTime = this.lastSaveTimestamp;
             const cloudData = await this.buildCloudSyncData();
-            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings', 'targets'];
+            const collections = ['listings', 'customers', 'appointments', 'fsbo', 'findings']; // targets senkron dışı
 
             // Her kategoriyi AYRI AYRI kaydet - biri başarısız olsa bile diğerleri kaydedilsin
             let successCount = 0;
