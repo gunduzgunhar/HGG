@@ -17,6 +17,93 @@ const app = {
     currentEditRegions: [],
     currentUser: null,
 
+    // imgBB API (ücretsiz fotoğraf hosting)
+    imgbbApiKey: '0f07203b83321800d1c5e6beab023e9d',
+
+    async uploadToImgBB(base64Data) {
+        try {
+            // data:image/jpeg;base64, kısmını kaldır
+            const base64Only = base64Data.replace(/^data:image\/\w+;base64,/, '');
+
+            const formData = new FormData();
+            formData.append('key', this.imgbbApiKey);
+            formData.append('image', base64Only);
+
+            const response = await fetch('https://api.imgbb.com/1/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('imgBB yükleme başarılı:', result.data.url);
+                return result.data.url;
+            } else {
+                console.error('imgBB yükleme hatası:', result);
+                return null;
+            }
+        } catch (error) {
+            console.error('imgBB yükleme hatası:', error);
+            return null;
+        }
+    },
+
+    // Mevcut fotoğrafları imgBB'ye taşı
+    async migratePhotosToImgBB() {
+        const photosMap = await this.photoStore.getAllPhotos();
+        let count = 0;
+        let failed = 0;
+
+        const migrateArray = async (items, photoField) => {
+            for (const item of items) {
+                if (photoField === 'photos' && item.photos && Array.isArray(item.photos)) {
+                    const newPhotos = [];
+                    for (const p of item.photos) {
+                        if (p && p.startsWith('data:')) {
+                            const url = await this.uploadToImgBB(p);
+                            if (url) { newPhotos.push(url); count++; }
+                            else { failed++; }
+                        } else if (p && this.isPhotoRef(p) && photosMap[p]) {
+                            const url = await this.uploadToImgBB(photosMap[p]);
+                            if (url) { newPhotos.push(url); count++; }
+                            else { failed++; }
+                        } else if (p && (p.startsWith('http://') || p.startsWith('https://'))) {
+                            newPhotos.push(p); // Zaten URL
+                        }
+                    }
+                    item.photos = newPhotos;
+                }
+                if (photoField === 'photo' && item.photo) {
+                    if (item.photo.startsWith('data:')) {
+                        const url = await this.uploadToImgBB(item.photo);
+                        if (url) { item.photo = url; count++; }
+                        else { item.photo = null; failed++; }
+                    } else if (this.isPhotoRef(item.photo) && photosMap[item.photo]) {
+                        const url = await this.uploadToImgBB(photosMap[item.photo]);
+                        if (url) { item.photo = url; count++; }
+                        else { item.photo = null; failed++; }
+                    }
+                }
+            }
+        };
+
+        console.log('Fotoğraf migration başlıyor...');
+        await migrateArray(this.data.fsbo, 'photos');
+        await migrateArray(this.data.targets, 'photo');
+        await migrateArray(this.data.listings, 'photos');
+        await migrateArray(this.data.findings, 'photos');
+
+        this.saveData('fsbo');
+        this.saveData('targets');
+        this.saveData('listings');
+        this.saveData('findings');
+        this.saveToFirestore(true);
+
+        alert(`Migration tamamlandı!\n${count} fotoğraf yüklendi\n${failed} başarısız`);
+        console.log(`Migration: ${count} başarılı, ${failed} başarısız`);
+    },
+
     // İzinli kullanıcılar (sadece bu email'ler giriş yapabilir)
     allowedUsers: [
         'hkn.gnhr1@gmail.com',
@@ -1709,32 +1796,34 @@ const app = {
             targets: this.data.targets || []
         }));
 
-        // Base64 fotoğrafları kaldır, sadece referansları koru
-        const stripBase64Photos = (items, photoField = 'photos') => {
+        // Sadece URL'leri koru (http/https), base64 ve IndexedDB referanslarını kaldır
+        const isValidUrl = (p) => p && (p.startsWith('http://') || p.startsWith('https://'));
+
+        const cleanPhotos = (items, photoField = 'photos') => {
             if (!items) return;
             items.forEach(item => {
                 if (photoField === 'photos' && item.photos && Array.isArray(item.photos)) {
-                    // Base64 olanları kaldır, referansları koru
-                    item.photos = item.photos.filter(p => p && !p.startsWith('data:'));
+                    // Sadece URL'leri koru
+                    item.photos = item.photos.filter(p => isValidUrl(p));
                 }
                 if (photoField === 'photo' && item.photo) {
-                    // Base64 ise null yap, referans ise koru
-                    if (item.photo.startsWith('data:')) {
+                    // URL değilse null yap
+                    if (!isValidUrl(item.photo)) {
                         item.photo = null;
                     }
                 }
             });
         };
 
-        stripBase64Photos(dataCopy.listings, 'photos');
-        stripBase64Photos(dataCopy.findings, 'photos');
-        stripBase64Photos(dataCopy.fsbo, 'photos');
+        cleanPhotos(dataCopy.listings, 'photos');
+        cleanPhotos(dataCopy.findings, 'photos');
+        cleanPhotos(dataCopy.fsbo, 'photos');
         dataCopy.fsbo.forEach(item => {
-            if (item.photo && item.photo.startsWith('data:')) {
+            if (item.photo && !isValidUrl(item.photo)) {
                 item.photo = null;
             }
         });
-        stripBase64Photos(dataCopy.targets, 'photo');
+        cleanPhotos(dataCopy.targets, 'photo');
 
         return dataCopy;
     },
@@ -5513,12 +5602,20 @@ app.addFsboPhoto = async function (file) {
         return;
     }
     const base64 = await this.compressPhoto(file);
-    const id = await this.photoStore.savePhoto(base64, 'fsbo', 'pending');
-    if (id) {
-        this._photoCache[id] = base64;
-        this.fsboPhotos.push(id);
+
+    // imgBB'ye yükle (cloud sync için)
+    const imgbbUrl = await this.uploadToImgBB(base64);
+    if (imgbbUrl) {
+        this.fsboPhotos.push(imgbbUrl);
     } else {
-        this.fsboPhotos.push(base64); // fallback
+        // Yükleme başarısız olursa IndexedDB'ye kaydet (local)
+        const id = await this.photoStore.savePhoto(base64, 'fsbo', 'pending');
+        if (id) {
+            this._photoCache[id] = base64;
+            this.fsboPhotos.push(id);
+        } else {
+            this.fsboPhotos.push(base64);
+        }
     }
     this.renderFsboImagePreview();
 };
@@ -6353,12 +6450,20 @@ app.handleTargetPhotoPaste = function (e) {
 
 app.setTargetPhotoFromFile = async function (file) {
     const base64 = await this.compressPhoto(file);
-    const id = await this.photoStore.savePhoto(base64, 'targets', 'pending');
-    if (id) {
-        this._photoCache[id] = base64;
-        this.targetPhoto = id;
+
+    // imgBB'ye yükle (cloud sync için)
+    const imgbbUrl = await this.uploadToImgBB(base64);
+    if (imgbbUrl) {
+        this.targetPhoto = imgbbUrl;
     } else {
-        this.targetPhoto = base64; // fallback
+        // Yükleme başarısız olursa IndexedDB'ye kaydet (local)
+        const id = await this.photoStore.savePhoto(base64, 'targets', 'pending');
+        if (id) {
+            this._photoCache[id] = base64;
+            this.targetPhoto = id;
+        } else {
+            this.targetPhoto = base64;
+        }
     }
     const previewSrc = base64; // Preview her zaman base64 gösterir
     const preview = document.getElementById('target-photo-preview');
