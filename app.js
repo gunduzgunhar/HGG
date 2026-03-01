@@ -1594,8 +1594,8 @@ const app = {
             if (doc.exists && this.firestoreLoaded) {
                 console.log("Real-time update received (split format)");
 
-                // Skip if we just saved (cooldown 15 seconds) or sync is locked
-                if (Date.now() - this.lastSaveTime < 15000) return;
+                // Skip if we just saved (cooldown 3 seconds) or sync is locked
+                if (Date.now() - this.lastSaveTime < 3000) return;
                 if (this.syncLock) return;
 
                 const cloudTimestamp = doc.data().lastUpdated || 0;
