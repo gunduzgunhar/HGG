@@ -1617,7 +1617,9 @@ const app = {
                     localStorage.setItem('rea_findings', JSON.stringify(this.data.findings));
                     localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
+                    // Listener'dan gelen veri tekrar Firestore'a yazılmasın
                     this.lastSaveTimestamp = cloudTimestamp;
+                    this.lastSaveTime = Date.now();
                     localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
                     this.normalizeLoadedData();
 
@@ -1647,6 +1649,11 @@ const app = {
 
             if (oldIds !== newIds) {
                 console.log(`Targets Live Sync: Cloud=${cloudTargets.length} (was ${localTargets.length})`);
+                // Listener'dan gelen veri tekrar Firestore'a yazılmasın
+                this.lastSaveTime = Date.now();
+                this.lastSaveTimestamp = Date.now();
+                localStorage.setItem('rea_lastSaveTimestamp', this.lastSaveTimestamp.toString());
+
                 this.data.targets = cloudTargets;
                 localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
                 if (typeof this.renderTargetListings === 'function') {
