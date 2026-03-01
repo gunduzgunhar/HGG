@@ -1631,38 +1631,8 @@ const app = {
             }
         });
 
-        // Targets için ayrı listener - HER ZAMAN ÇALIŞIR
-        window.db.collection('emlak_data').doc('targets').onSnapshot((doc) => {
-            if (!doc.exists) return;
-
-            // syncLock aktifse (kendi kayıtlarımız) atla
-            if (this.syncLock) {
-                console.log("Targets sync skipped - syncLock active");
-                return;
-            }
-
-            const cloudTargets = doc.data().data || [];
-            const localTargets = this.data.targets || [];
-
-            // Cloud'u direkt al - silme işlemleri de yansısın
-            const oldIds = localTargets.map(t => t.id).sort().join(',');
-            const newIds = cloudTargets.map(t => t.id).sort().join(',');
-
-            if (oldIds !== newIds) {
-                console.log(`Targets Live Sync: Cloud=${cloudTargets.length} (was ${localTargets.length})`);
-                // Listener'dan gelen veri tekrar Firestore'a yazılmasın
-                this.lastListenerUpdate = Date.now();
-                this.lastSaveTime = Date.now();
-                this.lastSaveTimestamp = Date.now();
-                localStorage.setItem('rea_lastSaveTimestamp', this.lastSaveTimestamp.toString());
-
-                this.data.targets = cloudTargets;
-                localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
-                if (typeof this.renderTargetListings === 'function') {
-                    this.renderTargetListings();
-                }
-            }
-        });
+        // Targets listener KALDIRILDI - senkronizasyon sadece sayfa yüklendiğinde ve manuel "Buluttan Çek" ile yapılır
+        // Bu, silme işlemlerinin geri gelmesini engeller
     },
 
     lastSaveTimestamp: 0,
