@@ -1494,25 +1494,7 @@ const app = {
                         this.lastSaveTimestamp = cloudTimestamp;
                         localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
 
-                        if (localOnlyFsbo.length > 0 || localOnlyTargets.length > 0) {
-                            setTimeout(() => this.saveToFirestore(), 2000);
-                        }
-                    } else {
-                        console.log("Local veri daha güncel, ama yine de targets senkronize ediliyor...");
-                        // Timestamp düşük olsa bile targets'ı cloud'dan çek ve merge et
-                        const targetsDoc = await window.db.collection('emlak_data').doc('targets').get();
-                        if (targetsDoc.exists) {
-                            const cloudTargets = targetsDoc.data().data || [];
-                            const localTargets = this.data.targets || [];
-                            const localTargetIds = new Set(localTargets.map(t => t.id));
-                            const cloudOnlyTargets = cloudTargets.filter(t => !localTargetIds.has(t.id));
-                            if (cloudOnlyTargets.length > 0) {
-                                console.log(`Targets Sync: ${cloudOnlyTargets.length} cloud kayıt ekleniyor`);
-                                this.data.targets = [...localTargets, ...cloudOnlyTargets];
-                                localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
-                            }
-                        }
-                        setTimeout(() => this.saveToFirestore(), 1000);
+                        // Cloud'dan aldık, geri yazmaya gerek yok
                     }
                 } else {
                     // ESKİ FORMAT: Tek document'tan oku ve yeni formata migrate et
@@ -1574,7 +1556,7 @@ const app = {
             localStorage.setItem('rea_fsbo', JSON.stringify(this.data.fsbo || []));
             localStorage.setItem('rea_findings', JSON.stringify(this.data.findings || []));
             localStorage.setItem('rea_targets', JSON.stringify(this.data.targets || []));
-            if (window.db) setTimeout(() => this.saveToFirestore(), 1200);
+            // Normalize sonrası Firestore'a yazmaya gerek yok - cloud zaten güncel
         }
 
         // Fotoğrafları IndexedDB'ye taşı (tek seferlik migrasyon)
@@ -6492,7 +6474,7 @@ app.onTargetDistrictChange = function () {
 app.addTarget = function (formData) {
     // Sync lock - cloud güncellemelerini engelle
     this.syncLock = true;
-    setTimeout(() => { this.syncLock = false; }, 10000); // 10 saniye sonra aç
+    setTimeout(() => { this.syncLock = false; }, 3000); // 10 saniye sonra aç
 
     const district = formData.get('district') || '';
     const neighborhood = formData.get('neighborhood') || '';
@@ -6536,7 +6518,7 @@ app.deleteTarget = function (id) {
     if (confirm('Bu hedef ilanı silmek istediğinize emin misiniz?')) {
         // Sync lock - cloud güncellemelerini engelle
         this.syncLock = true;
-        setTimeout(() => { this.syncLock = false; }, 10000);
+        setTimeout(() => { this.syncLock = false; }, 3000);
         const item = this.data.targets.find(x => x.id === id);
         if (item && item.photo && this.isPhotoRef(item.photo)) {
             this.photoStore.deletePhotos([item.photo]);
