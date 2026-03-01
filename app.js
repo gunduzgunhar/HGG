@@ -1618,6 +1618,7 @@ const app = {
                     localStorage.setItem('rea_targets', JSON.stringify(this.data.targets));
 
                     // Listener'dan gelen veri tekrar Firestore'a yazılmasın
+                    this.lastListenerUpdate = Date.now();
                     this.lastSaveTimestamp = cloudTimestamp;
                     this.lastSaveTime = Date.now();
                     localStorage.setItem('rea_lastSaveTimestamp', cloudTimestamp.toString());
@@ -1650,6 +1651,7 @@ const app = {
             if (oldIds !== newIds) {
                 console.log(`Targets Live Sync: Cloud=${cloudTargets.length} (was ${localTargets.length})`);
                 // Listener'dan gelen veri tekrar Firestore'a yazılmasın
+                this.lastListenerUpdate = Date.now();
                 this.lastSaveTime = Date.now();
                 this.lastSaveTimestamp = Date.now();
                 localStorage.setItem('rea_lastSaveTimestamp', this.lastSaveTimestamp.toString());
@@ -1798,8 +1800,16 @@ const app = {
         return dataCopy;
     },
 
+    lastListenerUpdate: 0, // Listener'dan son güncelleme zamanı
+
     saveToFirestore(immediate = false) {
         if (!window.db) return;
+
+        // Listener'dan güncelleme geldiyse 5 saniye bekle
+        if (Date.now() - this.lastListenerUpdate < 5000) {
+            console.log("saveToFirestore skipped - recent listener update");
+            return;
+        }
 
         clearTimeout(this.firestoreSaveTimeout);
 
