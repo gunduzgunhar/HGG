@@ -220,6 +220,38 @@ const app = {
         }
     },
 
+    // Gece Modu Toggle
+    toggleDarkMode() {
+        const body = document.body;
+        const icon = document.getElementById('dark-mode-icon');
+
+        body.classList.toggle('dark-mode');
+
+        if (body.classList.contains('dark-mode')) {
+            icon.classList.remove('ph-moon');
+            icon.classList.add('ph-sun');
+            localStorage.setItem('darkMode', 'enabled');
+        } else {
+            icon.classList.remove('ph-sun');
+            icon.classList.add('ph-moon');
+            localStorage.setItem('darkMode', 'disabled');
+        }
+    },
+
+    // Sayfa yüklendiğinde dark mode tercihini kontrol et
+    initDarkMode() {
+        const darkMode = localStorage.getItem('darkMode');
+        const icon = document.getElementById('dark-mode-icon');
+
+        if (darkMode === 'enabled') {
+            document.body.classList.add('dark-mode');
+            if (icon) {
+                icon.classList.remove('ph-moon');
+                icon.classList.add('ph-sun');
+            }
+        }
+    },
+
     async changePassword() {
         const currentPassword = document.getElementById('current-password').value;
         const newPassword = document.getElementById('new-password').value;
@@ -1269,6 +1301,9 @@ const app = {
         } catch (e) { if (window.log) log("Error attaching button: " + e); }
 
         console.log("App Initialized v3 - Kabasakal Check");
+
+        // Gece modu tercihini yükle
+        this.initDarkMode();
 
         // IndexedDB'yi başlat, sonra verileri yükle
         this.photoStore.init().then(() => {

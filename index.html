@@ -59,7 +59,7 @@
         console.log("Firebase initialized!");
     </script>
 
-    <link rel="stylesheet" href="style.css?v=force_reload_005">
+    <link rel="stylesheet" href="style.css?v=dark_mode_v1">
 </head>
 
 <body>
@@ -233,6 +233,9 @@
                 <header class="top-header">
                     <h2 id="page-title">Genel Bakış</h2>
                     <div class="header-actions">
+                        <button class="btn btn-icon" id="dark-mode-toggle" onclick="app.toggleDarkMode()" title="Gece Modu">
+                            <i class="ph ph-moon" id="dark-mode-icon"></i>
+                        </button>
                         <button class="btn btn-primary" id="quick-add-btn"
                             onclick="app.openAddListingModal(null, 'listing')">
                             <i class="ph ph-plus"></i> Hızlı Ekle
@@ -1996,7 +1999,7 @@
             </div>
         </div>
 
-        <script src="app.js?v=finding_detail_v1"></script>
+        <script src="app.js?v=dark_mode_v1"></script>
     </div><!-- /main-app -->
 </body>
 
