@@ -5083,22 +5083,30 @@ const app = {
                 : '-';
 
             return `
-                <div onclick="app.openGallery(${item.listingId})"
-                     style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; border-top:1px solid #eef2f7; padding:10px 2px; cursor:pointer;">
-                    <div style="min-width:0;">
-                        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                            <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; display:inline-block; flex-shrink:0;"></span>
-                            <span style="font-weight:600; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)}</span>
-                            ${urgency}
+                <div class="listing-card" onclick="app.openListingDetail(${item.listingId})" style="padding: 12px; margin-bottom: 8px; cursor: pointer;">
+                    <div class="listing-header" style="margin-bottom: 8px;">
+                        <div class="listing-title-group">
+                            <h3 class="listing-title" style="font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                                <span style="width:10px; height:10px; border-radius:50%; background:${dotColor}; display:inline-block; flex-shrink:0;"></span>
+                                ${escapeHtml(item.title)}
+                                ${urgency}
+                            </h3>
+                            <div class="listing-location-sm">
+                                <i class="ph ph-map-pin"></i> ${escapeHtml(item.location)}
+                            </div>
                         </div>
-                        <div style="margin-top:3px; font-size:12px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.location)}</div>
-                        <div style="margin-top:4px; font-size:12px; color:#334155;">${formatPrice(item.oldPrice)} TL -> ${formatPrice(item.newPrice)} TL</div>
+                        <div class="listing-price-badge">${formatPrice(item.newPrice)} ₺</div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-weight:700; color:${tone}; font-size:13px;">${changePrefix}${formatPrice(item.change)} TL</div>
-                        <div style="font-size:12px; color:${tone};">${changePrefix}${item.changePct.toFixed(2)}%</div>
-                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">${dateLabel}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border);">
+                        <div style="font-size: 12px; color: #64748b;">
+                            ${formatPrice(item.oldPrice)} ₺ → ${formatPrice(item.newPrice)} ₺
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 700; color: ${tone}; font-size: 13px;">${changePrefix}${formatPrice(item.change)} ₺</div>
+                            <div style="font-size: 11px; color: ${tone};">${changePrefix}${item.changePct.toFixed(2)}%</div>
+                        </div>
                     </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 6px; text-align: right;">${dateLabel}</div>
                 </div>
             `;
         }).join('');
