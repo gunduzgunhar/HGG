@@ -3890,12 +3890,32 @@ const app = {
             </div>`;
         }
 
+        // Satış fiyatı bilgisi
+        const finalPrice = item.final_price ? parseInt(item.final_price).toLocaleString('tr-TR') : null;
+        const soldPriceHtml = (item.status === 'sold' || item.status === 'deposit') && finalPrice
+            ? `<div style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border: 1px solid #86efac; padding:14px; border-radius:10px; margin-bottom:16px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <i class="ph ph-check-circle" style="color:#16a34a; font-size:20px;"></i>
+                    <span style="font-weight:600; color:#166534;">${item.status === 'sold' ? 'Satış Gerçekleşti' : 'Kapora Alındı'}</span>
+                </div>
+                <div style="font-size:24px; font-weight:700; color:#15803d;">${finalPrice} TL</div>
+                <div style="font-size:12px; color:#166534; margin-top:4px;">
+                    İlan Fiyatı: <span style="text-decoration:line-through;">${price} TL</span>
+                    ${parseInt(item.final_price) < parseInt(item.price)
+                        ? `<span style="margin-left:8px; color:#dc2626;">(${((parseInt(item.price) - parseInt(item.final_price)) / parseInt(item.price) * 100).toFixed(1)}% indirimli)</span>`
+                        : ''}
+                </div>
+            </div>`
+            : '';
+
         document.getElementById('listing-detail-title').textContent = item.title || 'İlan Detay';
         document.getElementById('listing-detail-body').innerHTML = `
             ${photosHtml}
 
+            ${soldPriceHtml}
+
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
-                <div style="font-size:22px; font-weight:700; color:#1e293b;">${price} TL</div>
+                <div style="font-size:22px; font-weight:700; color:#1e293b;">${item.status === 'sold' || item.status === 'deposit' ? `<span style="text-decoration:line-through; opacity:0.5;">${price} TL</span>` : `${price} TL`}</div>
                 <div style="display:flex; gap:6px; align-items:center;">
                     <span style="background:${statusColor}; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${status}</span>
                     <span style="background:#6366f1; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${type}</span>
