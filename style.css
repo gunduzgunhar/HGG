@@ -1375,50 +1375,39 @@ body {
 }
 
 
-/* Status Overlays (Center Banner) */
+/* Status Overlays (Corner Ribbon) */
 .status-overlay {
     position: absolute;
-    top: 50%;
-    left: -10px;
-    /* Slight bleed */
-    width: calc(100% + 20px);
-    transform: translateY(-50%) rotate(-5deg);
-    /* Slight rotation for stamp effect */
+    top: 12px;
+    right: 12px;
     text-align: center;
-    font-weight: 800;
-    font-size: 24px;
-    padding: 12px 0;
+    font-weight: 600;
+    font-size: 11px;
+    padding: 6px 10px;
     z-index: 4;
     text-transform: uppercase;
-    letter-spacing: 3px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.5px;
+    border-radius: 6px;
     pointer-events: none;
-    /* Allow clicking through to card */
-    backdrop-filter: blur(2px);
-    border-top: 2px solid rgba(255, 255, 255, 0.5);
-    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    line-height: 1.3;
 }
 
 .status-overlay.sold {
-    background: rgba(220, 38, 38, 0.95);
-    /* Red */
-    color: white;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .status-overlay.deposit {
-    background: rgba(234, 179, 8, 0.95);
-    /* Yellow */
-    color: #422006;
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+    background: rgba(234, 179, 8, 0.15);
+    color: #a16207;
+    border: 1px solid rgba(234, 179, 8, 0.3);
 }
 
 .status-overlay.cancelled {
-    background: rgba(75, 85, 99, 0.95);
-    /* Grey */
-    color: white;
-    transform: translateY(-50%) rotate(0deg);
-    /* Straight for cancelled */
+    background: rgba(107, 114, 128, 0.15);
+    color: #4b5563;
+    border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
 /* Map Pin Styles */

@@ -3508,9 +3508,9 @@ const app = {
                 // Compact Card HTML
                 return `
                             <div class="listing-card type-${item.type}" onclick="app.openListingDetail(${item.id})">
-                                ${item.status === 'sold' ? `<div class="status-overlay sold">SATILDI<br><span style="font-size: 0.6em">${(item.final_price || 0).toLocaleString('tr-TR')} ₺</span></div>` : ''}
-                                ${item.status === 'deposit' ? `<div class="status-overlay deposit">KAPORA ALINDI<br><span style="font-size: 0.6em">${(item.final_price || 0).toLocaleString('tr-TR')} ₺</span></div>` : ''}
-                                ${item.status === 'cancelled' ? '<div class="status-overlay cancelled">İPTAL EDİLDİ</div>' : ''}
+                                ${item.status === 'sold' ? `<div class="status-overlay sold"><i class="ph ph-check-circle"></i> Satıldı</div>` : ''}
+                                ${item.status === 'deposit' ? `<div class="status-overlay deposit"><i class="ph ph-hand-coins"></i> Kapora</div>` : ''}
+                                ${item.status === 'cancelled' ? '<div class="status-overlay cancelled"><i class="ph ph-x-circle"></i> İptal</div>' : ''}
                                 
                                 <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
                                 <div class="context-menu-dropdown" id="menu-${item.id}">
