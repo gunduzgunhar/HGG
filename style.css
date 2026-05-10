@@ -1660,6 +1660,59 @@ body.dark-mode #gallery-listing-details b {
     color: #f1f5f9 !important;
 }
 
+/* Dark mode - Dashboard & Bölge Analizi */
+body.dark-mode .neighborhood-stats,
+body.dark-mode .recent-listings,
+body.dark-mode .dashboard-content > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .neighborhood-stats h3,
+body.dark-mode .recent-listings h3,
+body.dark-mode .dashboard-content h3 {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode #neighborhood-stats-list,
+body.dark-mode #neighborhood-stats-list * {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #neighborhood-stats-list b,
+body.dark-mode #neighborhood-stats-list strong {
+    color: #f1f5f9 !important;
+}
+
+/* Dark mode - Müşteriler ve Ev Sahipleri kartları */
+body.dark-mode #crm-list h4,
+body.dark-mode #crm-list .customer-name,
+body.dark-mode [style*="color: #1f2937"],
+body.dark-mode [style*="color:#1f2937"] {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode #crm-list p,
+body.dark-mode #crm-list span,
+body.dark-mode #crm-list div {
+    color: #cbd5e1;
+}
+
+body.dark-mode #crm-list > div > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+/* Dark mode - Tüm kartlardaki koyu renkli metinler */
+body.dark-mode [style*="color:#111827"],
+body.dark-mode [style*="color: #111827"],
+body.dark-mode [style*="color:#374151"],
+body.dark-mode [style*="color: #374151"],
+body.dark-mode [style*="color:#1e293b"],
+body.dark-mode [style*="color: #1e293b"] {
+    color: #f1f5f9 !important;
+}
+
 /* Dark mode - İlanlar ve detay panelleri */
 body.dark-mode .gallery-panel,
 body.dark-mode .detail-panel,
