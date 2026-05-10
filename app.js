@@ -3994,9 +3994,17 @@ const app = {
     },
 
     // Ev sahibinin ilanlarını göster
-    showOwnerListings(ownerName, ownerPhone) {
-        const nameLower = (ownerName || '').toLocaleLowerCase('tr-TR').trim();
-        const phoneClean = (ownerPhone || '').replace(/\s/g, '');
+    showOwnerListings(customerId) {
+        const customer = this.data.customers.find(c => c.id == customerId);
+        if (!customer) {
+            alert('Ev sahibi bulunamadı!');
+            return;
+        }
+
+        const ownerName = customer.name || '';
+        const ownerPhone = customer.phone || '';
+        const nameLower = ownerName.toLocaleLowerCase('tr-TR').trim();
+        const phoneClean = ownerPhone.replace(/\s/g, '');
 
         // İlanlar ve bulumlar arasında ara
         const matchingListings = (this.data.listings || []).filter(item => {
@@ -4447,7 +4455,7 @@ const app = {
                         ${customer.notes ? `<p style="font-size: 12px; color: #4b5563; margin: 8px 0 0; padding: 8px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #d1d5db; white-space: pre-wrap; line-height: 1.4;"><i class="ph ph-note-pencil" style="color:#9ca3af;"></i> ${customer.notes}</p>` : ''}
                         <div style="display: flex; gap: 8px; margin-top: 12px; border-top: 1px solid #f3f4f6; padding-top: 12px;">
                             ${customer.type === 'seller'
-                                ? `<button onclick="app.showOwnerListings('${customer.name}', '${customer.phone}')" style="flex: 1; background: #f59e0b; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;"><i class="ph ph-buildings"></i> İlanlarını Gör</button>`
+                                ? `<button onclick="app.showOwnerListings(${customer.id})" style="flex: 1; background: #f59e0b; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;"><i class="ph ph-buildings"></i> İlanlarını Gör</button>`
                                 : `<button onclick="app.findMatches('${customer.id}')" style="flex: 1; background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;">İlan Bul</button>`
                             }
                             <button onclick="app.openCustomerEditPopup('${customer.id}')" style="flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer;">Düzenle</button>
