@@ -107,7 +107,9 @@ const app = {
     // İzinli kullanıcılar (sadece bu email'ler giriş yapabilir)
     allowedUsers: [
         'hkn.gnhr1@gmail.com',
-        'aleynadincgorur1@gmail.com'
+        'aleynadincgorur1@gmail.com',
+        'mehmetkadircanpolatci@gmail.com',
+        'aleynadincgorur6@gmail.com'
     ],
 
     // --- Firebase Authentication ---
@@ -214,6 +216,71 @@ const app = {
                 await window.auth.signOut();
             } catch (error) {
                 console.error('Logout error:', error);
+            }
+        }
+    },
+
+    async changePassword() {
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const errorDiv = document.getElementById('change-password-error');
+        const successDiv = document.getElementById('change-password-success');
+
+        errorDiv.style.display = 'none';
+        successDiv.style.display = 'none';
+
+        // Validasyon
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Tüm alanları doldurun.';
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Yeni şifre en az 6 karakter olmalı.';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Yeni şifreler eşleşmiyor.';
+            return;
+        }
+
+        try {
+            const user = window.auth.currentUser;
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
+
+            // Önce mevcut şifreyi doğrula
+            await user.reauthenticateWithCredential(credential);
+
+            // Şifreyi güncelle
+            await user.updatePassword(newPassword);
+
+            successDiv.style.display = 'block';
+            successDiv.textContent = 'Şifre başarıyla değiştirildi!';
+
+            // Formu temizle
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+
+            // 2 saniye sonra modalı kapat
+            setTimeout(() => {
+                this.modals.closeAll();
+            }, 2000);
+
+        } catch (error) {
+            console.error('Change password error:', error);
+            errorDiv.style.display = 'block';
+            if (error.code === 'auth/wrong-password') {
+                errorDiv.textContent = 'Mevcut şifre hatalı.';
+            } else if (error.code === 'auth/weak-password') {
+                errorDiv.textContent = 'Yeni şifre çok zayıf.';
+            } else {
+                errorDiv.textContent = 'Şifre değiştirilemedi: ' + error.message;
             }
         }
     },

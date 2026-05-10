@@ -205,6 +205,10 @@
                         <i class="ph ph-cloud-arrow-down"></i>
                         <span>Buluttan Çek</span>
                     </button>
+                    <button class="nav-item" onclick="app.modals.open('change-password')" style="font-size: 14px;">
+                        <i class="ph ph-key"></i>
+                        <span>Şifre Değiştir</span>
+                    </button>
                     <button class="nav-item" onclick="app.logout()" style="font-size: 14px; color: #dc2626;">
                         <i class="ph ph-sign-out"></i>
                         <span>Çıkış Yap</span>
@@ -555,6 +559,38 @@
         </div>
 
         <!-- MODALS -->
+
+        <!-- Change Password Modal -->
+        <div class="modal-overlay" id="modal-change-password">
+            <div class="modal" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>Şifre Değiştir</h3>
+                    <button class="close-modal"><i class="ph ph-x"></i></button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-change-password" onsubmit="return false;">
+                        <div class="form-group">
+                            <label>Mevcut Şifre</label>
+                            <input type="password" id="current-password" required placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label>Yeni Şifre</label>
+                            <input type="password" id="new-password" required placeholder="En az 6 karakter">
+                        </div>
+                        <div class="form-group">
+                            <label>Yeni Şifre (Tekrar)</label>
+                            <input type="password" id="confirm-password" required placeholder="••••••••">
+                        </div>
+                        <div id="change-password-error" style="display:none; background:#fef2f2; color:#991b1b; padding:10px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+                        <div id="change-password-success" style="display:none; background:#f0fdf4; color:#166534; padding:10px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-text close-modal">İptal</button>
+                            <button type="submit" class="btn btn-primary" onclick="app.changePassword()">Şifreyi Değiştir</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
         <!-- Add Listing Modal -->
         <div class="modal-overlay" id="modal-add-listing">
