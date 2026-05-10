@@ -5091,6 +5091,7 @@ const app = {
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:13px; font-weight:500; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)} ${urgency}</div>
                         <div style="font-size:11px; color:#64748b;">${escapeHtml(item.location)}</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">${formatPrice(item.oldPrice)} ₺ → ${formatPrice(item.newPrice)} ₺</div>
                     </div>
                     <div style="text-align:right; flex-shrink:0;">
                         <div style="font-size:12px; font-weight:600; color:${tone};">${changePrefix}${formatPrice(item.change)} ₺</div>
