@@ -1543,7 +1543,10 @@ body {
         bottom: 0;
         left: 0;
         right: 0;
+        top: auto;
         width: 100%;
+        min-width: 100%;
+        max-width: 100%;
         height: auto;
         flex-direction: row;
         padding: 0;
@@ -1563,9 +1566,10 @@ body {
     .main-nav {
         flex-direction: row;
         width: 100%;
-        justify-content: flex-start;
-        padding: 8px 4px;
-        gap: 2px;
+        justify-content: space-around;
+        align-items: center;
+        padding: 8px 0;
+        gap: 0;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
@@ -1577,12 +1581,15 @@ body {
 
     .nav-item {
         flex-direction: column;
-        padding: 8px 6px;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 8px;
         font-size: 10px;
-        gap: 4px;
+        gap: 3px;
         flex: 1;
-        min-width: 0;
-        border-radius: 0;
+        min-width: 50px;
+        max-width: 70px;
+        border-radius: 8px;
     }
 
     .nav-item i {
@@ -1595,6 +1602,7 @@ body {
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 100%;
+        text-align: center;
     }
 
     .nav-item.active {
@@ -1604,12 +1612,14 @@ body {
     }
 
     .hide-mobile {
-        display: flex !important;
+        display: none !important;
     }
 
     .main-content {
+        margin-left: 0 !important;
         padding-bottom: 80px;
-        height: calc(100vh - 70px);
+        height: auto;
+        min-height: calc(100vh - 70px);
     }
 
     .top-header {
