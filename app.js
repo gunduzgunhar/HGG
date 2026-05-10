@@ -3506,11 +3506,12 @@ const app = {
                 const facadeTag = item.facade ? `<span><i class="ph ph-compass"></i> ${item.facade}</span>` : '';
                 const deedTag = item.deed_status ? `<span><i class="ph ph-file-text"></i> ${item.deed_status}</span>` : '';
                 // Compact Card HTML
+                const statusClass = item.status === 'sold' ? 'is-sold' : item.status === 'deposit' ? 'is-deposit' : item.status === 'cancelled' ? 'is-cancelled' : '';
                 return `
-                            <div class="listing-card type-${item.type}" onclick="app.openListingDetail(${item.id})">
-                                ${item.status === 'sold' ? `<div class="status-overlay sold"><i class="ph ph-check-circle"></i> Satıldı</div>` : ''}
-                                ${item.status === 'deposit' ? `<div class="status-overlay deposit"><i class="ph ph-hand-coins"></i> Kapora</div>` : ''}
-                                ${item.status === 'cancelled' ? '<div class="status-overlay cancelled"><i class="ph ph-x-circle"></i> İptal</div>' : ''}
+                            <div class="listing-card type-${item.type} ${statusClass}" onclick="app.openListingDetail(${item.id})">
+                                ${item.status === 'sold' ? `<div class="status-overlay sold">Satıldı</div>` : ''}
+                                ${item.status === 'deposit' ? `<div class="status-overlay deposit">Kapora</div>` : ''}
+                                ${item.status === 'cancelled' ? '<div class="status-overlay cancelled">İptal</div>' : ''}
                                 
                                 <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
                                 <div class="context-menu-dropdown" id="menu-${item.id}">
