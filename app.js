@@ -3564,8 +3564,8 @@ const app = {
                 const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
 
                 return `
-                            <div class="listing-card type-${item.type}" onclick="app.openAddListingModal(${item.id}, 'finding')">
-                                <button class="listing-menu-btn" onclick="app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
+                            <div class="listing-card type-${item.type}" onclick="app.openFindingDetail(${item.id})">
+                                <button class="listing-menu-btn" onclick="event.stopPropagation(); app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
                                 <div class="context-menu-dropdown" id="menu-${item.id}">
                                     <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'begenilmedi')">
                                         <i class="ph ph-thumbs-down" style="color: #ef4444"></i> Beğenilmedi
@@ -3632,6 +3632,110 @@ const app = {
             this.saveData('findings');
             this.renderFindings();
         }
+    },
+
+    openFindingDetail(id) {
+        const item = (this.data.findings || []).find(x => x.id === id);
+        if (!item) return;
+
+        const price = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '0';
+        const date = item.date ? new Date(item.date).toLocaleDateString('tr-TR') : '-';
+        const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
+
+        // Fotoğraflar
+        const photoArray = item.photos || [];
+        const photosHtml = photoArray.length > 0
+            ? `<div id="finding-detail-photos" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+                ${photoArray.map(src => {
+                    if (this.isPhotoRef(src)) {
+                        return `<img data-photo-id="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer; background:#f1f5f9;" onclick="app.openLightbox(this.src)">`;
+                    }
+                    return `<img src="${src}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; cursor:pointer;" onclick="app.openLightbox(this.src)">`;
+                }).join('')}
+            </div>`
+            : '';
+
+        document.getElementById('finding-detail-title').textContent = item.title || 'Bulum Detay';
+        document.getElementById('finding-detail-body').innerHTML = `
+            ${photosHtml}
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+                <div style="font-size:22px; font-weight:700; color:#1e293b;">${price} TL</div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <span style="background:#f97316; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">Bulum</span>
+                    <span style="background:#6366f1; color:white; font-size:12px; padding:4px 10px; border-radius:6px;">${type}</span>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:16px;">
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-map-pin"></i> Konum</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.location || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-door"></i> Oda</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.rooms || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-ruler"></i> m²</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.size_net || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-stairs"></i> Kat</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.floor_current || '-'}/${item.floor_total || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-calendar"></i> Bina Yaşı</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.building_age || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px; text-align:center;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-cooking-pot"></i> Mutfak</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.kitchen || '-'}</div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
+                <div style="background:#f8fafc; padding:12px; border-radius:8px;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-warning"></i> Hasar</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.damage || '-'}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:8px;">
+                    <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-paint-brush"></i> İç Durum</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b;">${item.interior_condition || '-'}</div>
+                </div>
+            </div>
+
+            ${item.street ? `<div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:16px;">
+                <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-map-pin-line"></i> Sokak/Cadde</div>
+                <div style="font-size:14px; color:#1e293b;">${item.street}</div>
+            </div>` : ''}
+
+            ${item.description ? `<div style="background:#f8fafc; padding:12px; border-radius:8px; margin-bottom:16px;">
+                <div style="font-size:11px; color:#64748b; margin-bottom:4px;"><i class="ph ph-note-pencil"></i> Açıklama</div>
+                <div style="font-size:14px; color:#1e293b; white-space:pre-wrap;">${item.description}</div>
+            </div>` : ''}
+
+            ${item.owner_name || item.owner_phone ? `<div style="background:#fef3c7; padding:12px; border-radius:8px; margin-bottom:16px;">
+                <div style="font-size:11px; color:#92400e; margin-bottom:4px;"><i class="ph ph-user"></i> Mal Sahibi</div>
+                <div style="font-size:14px; color:#1e293b;">${item.owner_name || '-'} ${item.owner_phone ? `- <a href="tel:${item.owner_phone}" style="color:#6366f1;">${item.owner_phone}</a>` : ''}</div>
+            </div>` : ''}
+
+            <div style="font-size:11px; color:#9ca3af; margin-bottom:16px;">Eklenme: ${date}</div>
+
+            <div style="display:flex; gap:8px; border-top:1px solid #e5e7eb; padding-top:14px;">
+                <button class="btn btn-sm" onclick="app.modals.closeAll(); app.openAddListingModal(${item.id}, 'finding')" style="flex:1; background:#4f46e5; color:white; border:none; border-radius:8px; padding:10px; font-size:13px; cursor:pointer;">
+                    <i class="ph ph-pencil-simple"></i> Düzenle
+                </button>
+                <button class="btn btn-sm" onclick="app.deleteFinding(${item.id})" style="flex:1; background:#fee2e2; color:#991b1b; border:none; border-radius:8px; padding:10px; font-size:13px; cursor:pointer;">
+                    <i class="ph ph-trash"></i> Sil
+                </button>
+            </div>
+        `;
+
+        this.modals.open('finding-detail');
+
+        // IndexedDB'den fotoğrafları çöz
+        this.resolveRenderedPhotos('#finding-detail-photos');
     },
 
     onFsboDistrictChange() {
