@@ -3693,7 +3693,7 @@ const app = {
                                             <i class="ph ph-map-pin"></i> ${location}
                                         </div>
                                     </div>
-                                    <div class="listing-price-badge" style="background:orange">${price} ₺</div>
+                                    <div class="listing-price-badge">${price} ₺</div>
                                 </div>
                                 
                                 <div class="listing-stats-grid">
