@@ -1626,6 +1626,19 @@ body.dark-mode .context-menu-item:hover {
     background: #334155;
 }
 
+/* Dark mode - Listing stats grid (oda, kat, m²) */
+body.dark-mode .listing-stats-grid {
+    background: #0f172a;
+}
+
+body.dark-mode .stat-item {
+    color: #f1f5f9;
+}
+
+body.dark-mode .stat-item i {
+    color: #94a3b8;
+}
+
 /* Dark mode - İlanlar ve detay panelleri */
 body.dark-mode .gallery-panel,
 body.dark-mode .detail-panel,
