@@ -3591,18 +3591,70 @@ const app = {
         }).join('');
     },
 
+    onFindingFilterDistrictChange() {
+        const districtSelect = document.getElementById('finding-filter-district');
+        const neighborhoodSelect = document.getElementById('finding-filter-neighborhood');
+        if (!districtSelect || !neighborhoodSelect) return;
+
+        const district = districtSelect.value;
+        neighborhoodSelect.innerHTML = '<option value="">Tüm Mahalleler</option>';
+
+        if (district && this.adanaLocations[district]) {
+            Object.keys(this.adanaLocations[district].neighborhoods).forEach(n => {
+                const option = document.createElement('option');
+                option.value = n;
+                option.textContent = n;
+                neighborhoodSelect.appendChild(option);
+            });
+        }
+        this.renderFindings();
+    },
+
     renderFindings() {
         const grid = document.getElementById('findings-grid');
         if (!grid) return;
         grid.innerHTML = '';
 
-        const items = this.data.findings || [];
+        // Get Filter Values
+        const searchInput = document.getElementById('finding-search');
+        const searchTerm = searchInput ? searchInput.value.toLocaleLowerCase('tr-TR') : '';
+        const districtFilter = document.getElementById('finding-filter-district') ? document.getElementById('finding-filter-district').value : '';
+        const neighborhoodFilter = document.getElementById('finding-filter-neighborhood') ? document.getElementById('finding-filter-neighborhood').value : '';
+        const roomFilter = document.getElementById('finding-filter-rooms') ? document.getElementById('finding-filter-rooms').value : '';
+
+        let items = this.data.findings || [];
+
+        // Apply filters
+        items = items.filter(item => {
+            try {
+                const title = (item.title || '').toLocaleLowerCase('tr-TR');
+                const location = (item.location || '').toLocaleLowerCase('tr-TR');
+                const owner = (item.owner_name || '').toLocaleLowerCase('tr-TR');
+
+                // Text Search
+                if (searchTerm && !(title.includes(searchTerm) || location.includes(searchTerm) || owner.includes(searchTerm))) return false;
+
+                // District Filter
+                if (districtFilter && !location.includes(districtFilter.toLocaleLowerCase('tr-TR'))) return false;
+
+                // Neighborhood Filter
+                if (neighborhoodFilter && !location.includes(neighborhoodFilter.toLocaleLowerCase('tr-TR'))) return false;
+
+                // Room Filter
+                if (roomFilter && item.rooms !== roomFilter) return false;
+
+                return true;
+            } catch (err) {
+                console.error("Filter error for finding:", item, err);
+                return true;
+            }
+        });
 
         if (items.length === 0) {
             grid.innerHTML = `
                             <div class="empty-state" style="grid-column: 1/-1;">
                                 <i class="ph ph-magnifying-glass-plus"></i>
-                                <p>Henüz bulum eklenmedi.</p>
+                                <p>Henüz bulum eklenmedi veya filtre sonucu bulunamadı.</p>
                             </div>`;
             return;
         }

@@ -422,6 +422,34 @@
                                 <i class="ph ph-plus"></i> Bulum Ekle
                             </button>
                         </div>
+                        <!-- Bulum Filtre Bar -->
+                        <div class="filter-bar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; background: #e0f2fe; padding: 15px; border-radius: 8px;">
+                            <input type="text" id="finding-search" placeholder="Bulum ara..." class="search-input"
+                                oninput="app.renderFindings()" style="flex: 2; min-width: 200px;">
+                            <select class="filter-select" id="finding-filter-district"
+                                onchange="app.onFindingFilterDistrictChange()" style="flex:1; min-width: 120px;">
+                                <option value="">Tüm İlçeler</option>
+                                <option value="Seyhan">Seyhan</option>
+                                <option value="Çukurova">Çukurova</option>
+                                <option value="Yüreğir">Yüreğir</option>
+                                <option value="Sarıçam">Sarıçam</option>
+                            </select>
+                            <select class="filter-select" id="finding-filter-neighborhood" onchange="app.renderFindings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="">Tüm Mahalleler</option>
+                            </select>
+                            <select class="filter-select" id="finding-filter-rooms" onchange="app.renderFindings()"
+                                style="flex:1; min-width: 120px;">
+                                <option value="">Tüm Odalar</option>
+                                <option value="1+0">1+0</option>
+                                <option value="1+1">1+1</option>
+                                <option value="2+1">2+1</option>
+                                <option value="3+1">3+1</option>
+                                <option value="4+1">4+1</option>
+                                <option value="5+1">5+1</option>
+                                <option value="6+1">6+1</option>
+                            </select>
+                        </div>
                         <div class="listings-grid" id="findings-grid">
                             <div class="empty-state">
                                 <i class="ph ph-magnifying-glass-plus"></i>
