@@ -4164,8 +4164,21 @@ const app = {
     },
 
     openEditListingModal(id) {
-        const listing = this.data.listings.find(l => l.id === id);
+        // Önce listings'de ara, yoksa findings'de ara
+        let listing = this.data.listings.find(l => l.id === id);
+        let isFromFindings = false;
+
+        if (!listing) {
+            listing = (this.data.findings || []).find(l => l.id === id);
+            isFromFindings = true;
+        }
+
         if (!listing) return;
+
+        // Mode'u ayarla (findings'den geliyorsa)
+        if (isFromFindings) {
+            window.currentAddMode = 'finding';
+        }
 
         const form = document.getElementById('form-edit-listing');
         if (!form) return;
@@ -4239,7 +4252,17 @@ const app = {
         const formData = new FormData(form);
         const id = parseInt(formData.get('id'));
 
-        const index = this.data.listings.findIndex(l => l.id === id);
+        // Önce listings'de ara, yoksa findings'de ara
+        let index = this.data.listings.findIndex(l => l.id === id);
+        let targetArray = this.data.listings;
+        let targetKey = 'listings';
+
+        if (index === -1) {
+            index = (this.data.findings || []).findIndex(l => l.id === id);
+            targetArray = this.data.findings || [];
+            targetKey = 'findings';
+        }
+
         if (index === -1) {
             alert("İlan bulunamadı! ID: " + id);
             return;
@@ -4252,7 +4275,7 @@ const app = {
             const digits = String(value || '').replace(/[^\d]/g, '');
             return digits ? parseInt(digits, 10) : 0;
         };
-        const currentListing = this.data.listings[index];
+        const currentListing = targetArray[index];
         const oldPrice = parsePrice(currentListing.price);
         const newPrice = parsePrice(formData.get('price'));
         const priceHistory = Array.isArray(currentListing.price_history) ? [...currentListing.price_history] : [];
@@ -4304,21 +4327,27 @@ const app = {
 
         console.log('NEW interior_condition:', updatedListing.interior_condition);
 
-        this.data.listings[index] = updatedListing;
-        this.saveData('listings');
+        targetArray[index] = updatedListing;
+        this.saveData(targetKey);
 
         // DEBUG: localStorage'a kaydedildi mi kontrol et
-        const saved = JSON.parse(localStorage.getItem('rea_listings'));
-        const savedListing = saved.find(l => l.id === id);
+        const saved = JSON.parse(localStorage.getItem('rea_' + targetKey));
+        const savedListing = saved ? saved.find(l => l.id === id) : null;
         console.log('SAVED interior_condition in localStorage:', savedListing?.interior_condition);
         console.log('=== END DEBUG ===');
 
         // Firestore'a HEMEN kaydet (debounce olmadan)
         this.saveToFirestore(true);
-        this.renderListings();
+
+        // Doğru listeyi renderla
+        if (targetKey === 'findings') {
+            this.renderFindings();
+        } else {
+            this.renderListings();
+        }
         this.updateStats();
         this.modals.closeAll();
-        alert("İlan güncellendi!");
+        alert(targetKey === 'findings' ? "Bulum güncellendi!" : "İlan güncellendi!");
     },
 
     deleteListing(id) {
