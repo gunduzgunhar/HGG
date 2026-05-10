@@ -316,88 +316,107 @@
 
                     <!-- LISTINGS VIEW -->
                     <section id="listings" class="view">
-                        <div class="filter-bar" style="flex-wrap: wrap; gap: 10px;">
-                            <input type="text" placeholder="İlan ara..." class="search-input"
-                                style="flex: 2; min-width: 200px;">
+                        <div class="filter-bar">
+                            <div class="search-wrapper">
+                                <i class="ph ph-magnifying-glass"></i>
+                                <input type="text" placeholder="İlan ara..." class="search-input">
+                            </div>
 
-                            <select class="filter-select" id="list-filter-district"
-                                onchange="app.onListFilterDistrictChange()" style="flex:1; min-width: 120px;">
-                                <option value="">Tüm İlçeler</option>
-                                <option value="Seyhan">Seyhan</option>
-                                <option value="Çukurova">Çukurova</option>
-                                <option value="Yüreğir">Yüreğir</option>
-                                <option value="Sarıçam">Sarıçam</option>
-                            </select>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-district"
+                                    onchange="app.onListFilterDistrictChange()">
+                                    <option value="">Tüm İlçeler</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
 
-                            <select class="filter-select" id="list-filter-neighborhood" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="">Tüm Mahalleler</option>
-                            </select>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-neighborhood" onchange="app.renderListings()">
+                                    <option value="">Tüm Mahalleler</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
 
-                            <select class="filter-select" id="list-filter-rooms" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="">Tüm Odalar</option>
-                                <option value="1+0">1+0</option>
-                                <option value="1+1">1+1</option>
-                                <option value="2+1">2+1</option>
-                                <option value="3+1">3+1</option>
-                                <option value="4+1">4+1</option>
-                                <option value="5+1">5+1</option>
-                                <option value="6+1">6+1</option>
-                                <option value="Villa">Villa</option>
-                            </select>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-rooms" onchange="app.renderListings()">
+                                    <option value="">Tüm Odalar</option>
+                                    <option value="1+0">1+0</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="5+1">5+1</option>
+                                    <option value="6+1">6+1</option>
+                                    <option value="Villa">Villa</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
 
-                            <select class="filter-select" id="list-filter-damage" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="all">Hasar Durumu: Tümü</option>
-                                <option value="Hasarsız">Hasarsız</option>
-                                <option value="Az Hasarlı">Az Hasarlı</option>
-                                <option value="Orta Hasarlı">Orta Hasarlı</option>
-                                <option value="Ağır Hasarlı">Ağır Hasarlı</option>
-                                <option value="Azdan Az Hasarlı">Azdan Az Hasarlı</option>
-                                <option value="Azdan Hasarsız">Azdan Hasarsız</option>
-                                <option value="Ortadan Az Hasarlı">Ortadan Az Hasarlı</option>
-                                <option value="Ortadan Hasarsız">Ortadan Hasarsız</option>
-                            </select>
-                            <select class="filter-select" id="list-filter-facade" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="all">Cephe: Tümü</option>
-                                <optgroup label="Tek Cephe">
-                                    <option value="K (Kuzey)">K (Kuzey)</option>
-                                    <option value="G (Güney)">G (Güney)</option>
-                                    <option value="D (Doğu)">D (Doğu)</option>
-                                    <option value="B (Batı)">B (Batı)</option>
-                                </optgroup>
-                                <optgroup label="Çift Cephe">
-                                    <option value="KD (Kuzey-Doğu)">KD (Kuzey-Doğu)</option>
-                                    <option value="KB (Kuzey-Batı)">KB (Kuzey-Batı)</option>
-                                    <option value="GD (Güney-Doğu)">GD (Güney-Doğu)</option>
-                                    <option value="GB (Güney-Batı)">GB (Güney-Batı)</option>
-                                    <option value="KG (Kuzey-Güney)">KG (Kuzey-Güney)</option>
-                                    <option value="DB (Doğu-Batı)">DB (Doğu-Batı)</option>
-                                </optgroup>
-                                <optgroup label="3 Cephe">
-                                    <option value="KGD (Kuzey-Güney-Doğu)">KGD (Kuzey-Güney-Doğu)</option>
-                                    <option value="KGB (Kuzey-Güney-Batı)">KGB (Kuzey-Güney-Batı)</option>
-                                    <option value="KDB (Kuzey-Doğu-Batı)">KDB (Kuzey-Doğu-Batı)</option>
-                                    <option value="GDB (Güney-Doğu-Batı)">GDB (Güney-Doğu-Batı)</option>
-                                </optgroup>
-                                <option value="4 Cephe">4 Cephe (Tam)</option>
-                            </select>
-                            <select class="filter-select" id="list-filter-deed" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="all">Tapu: Tümü</option>
-                                <option value="Kat Mülkiyetli">Kat Mülkiyetli</option>
-                                <option value="Kat İrtifaklı">Kat İrtifaklı</option>
-                            </select>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-damage" onchange="app.renderListings()">
+                                    <option value="all">Hasar: Tümü</option>
+                                    <option value="Hasarsız">Hasarsız</option>
+                                    <option value="Az Hasarlı">Az Hasarlı</option>
+                                    <option value="Orta Hasarlı">Orta Hasarlı</option>
+                                    <option value="Ağır Hasarlı">Ağır Hasarlı</option>
+                                    <option value="Azdan Az Hasarlı">Azdan Az Hasarlı</option>
+                                    <option value="Azdan Hasarsız">Azdan Hasarsız</option>
+                                    <option value="Ortadan Az Hasarlı">Ortadan Az Hasarlı</option>
+                                    <option value="Ortadan Hasarsız">Ortadan Hasarsız</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
 
-                            <select class="filter-select" id="list-filter-type" onchange="app.renderListings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="all">Tüm İlanlar</option>
-                                <option value="sale">Satılık</option>
-                                <option value="rent">Kiralık</option>
-                                <option value="passive">Pasif</option>
-                            </select>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-facade" onchange="app.renderListings()">
+                                    <option value="all">Cephe: Tümü</option>
+                                    <optgroup label="Tek Cephe">
+                                        <option value="K (Kuzey)">K (Kuzey)</option>
+                                        <option value="G (Güney)">G (Güney)</option>
+                                        <option value="D (Doğu)">D (Doğu)</option>
+                                        <option value="B (Batı)">B (Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="Çift Cephe">
+                                        <option value="KD (Kuzey-Doğu)">KD (Kuzey-Doğu)</option>
+                                        <option value="KB (Kuzey-Batı)">KB (Kuzey-Batı)</option>
+                                        <option value="GD (Güney-Doğu)">GD (Güney-Doğu)</option>
+                                        <option value="GB (Güney-Batı)">GB (Güney-Batı)</option>
+                                        <option value="KG (Kuzey-Güney)">KG (Kuzey-Güney)</option>
+                                        <option value="DB (Doğu-Batı)">DB (Doğu-Batı)</option>
+                                    </optgroup>
+                                    <optgroup label="3 Cephe">
+                                        <option value="KGD (Kuzey-Güney-Doğu)">KGD (Kuzey-Güney-Doğu)</option>
+                                        <option value="KGB (Kuzey-Güney-Batı)">KGB (Kuzey-Güney-Batı)</option>
+                                        <option value="KDB (Kuzey-Doğu-Batı)">KDB (Kuzey-Doğu-Batı)</option>
+                                        <option value="GDB (Güney-Doğu-Batı)">GDB (Güney-Doğu-Batı)</option>
+                                    </optgroup>
+                                    <option value="4 Cephe">4 Cephe (Tam)</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
+
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-deed" onchange="app.renderListings()">
+                                    <option value="all">Tapu: Tümü</option>
+                                    <option value="Kat Mülkiyetli">Kat Mülkiyetli</option>
+                                    <option value="Kat İrtifaklı">Kat İrtifaklı</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
+
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="list-filter-type" onchange="app.renderListings()">
+                                    <option value="all">Tüm İlanlar</option>
+                                    <option value="sale">Satılık</option>
+                                    <option value="rent">Kiralık</option>
+                                    <option value="passive">Pasif</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
                         </div>
                         <div id="listings-stats"
                             style="margin-bottom: 15px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 13px; color: #475569;">
@@ -423,32 +442,42 @@
                             </button>
                         </div>
                         <!-- Bulum Filtre Bar -->
-                        <div class="filter-bar" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; background: #e0f2fe; padding: 15px; border-radius: 8px;">
-                            <input type="text" id="finding-search" placeholder="Bulum ara..." class="search-input"
-                                oninput="app.renderFindings()" style="flex: 2; min-width: 200px;">
-                            <select class="filter-select" id="finding-filter-district"
-                                onchange="app.onFindingFilterDistrictChange()" style="flex:1; min-width: 120px;">
-                                <option value="">Tüm İlçeler</option>
-                                <option value="Seyhan">Seyhan</option>
-                                <option value="Çukurova">Çukurova</option>
-                                <option value="Yüreğir">Yüreğir</option>
-                                <option value="Sarıçam">Sarıçam</option>
-                            </select>
-                            <select class="filter-select" id="finding-filter-neighborhood" onchange="app.renderFindings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="">Tüm Mahalleler</option>
-                            </select>
-                            <select class="filter-select" id="finding-filter-rooms" onchange="app.renderFindings()"
-                                style="flex:1; min-width: 120px;">
-                                <option value="">Tüm Odalar</option>
-                                <option value="1+0">1+0</option>
-                                <option value="1+1">1+1</option>
-                                <option value="2+1">2+1</option>
-                                <option value="3+1">3+1</option>
-                                <option value="4+1">4+1</option>
-                                <option value="5+1">5+1</option>
-                                <option value="6+1">6+1</option>
-                            </select>
+                        <div class="filter-bar">
+                            <div class="search-wrapper">
+                                <i class="ph ph-magnifying-glass"></i>
+                                <input type="text" id="finding-search" placeholder="Bulum ara..." class="search-input"
+                                    oninput="app.renderFindings()">
+                            </div>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="finding-filter-district"
+                                    onchange="app.onFindingFilterDistrictChange()">
+                                    <option value="">Tüm İlçeler</option>
+                                    <option value="Seyhan">Seyhan</option>
+                                    <option value="Çukurova">Çukurova</option>
+                                    <option value="Yüreğir">Yüreğir</option>
+                                    <option value="Sarıçam">Sarıçam</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="finding-filter-neighborhood" onchange="app.renderFindings()">
+                                    <option value="">Tüm Mahalleler</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
+                            <div class="filter-select-wrapper">
+                                <select class="filter-select" id="finding-filter-rooms" onchange="app.renderFindings()">
+                                    <option value="">Tüm Odalar</option>
+                                    <option value="1+0">1+0</option>
+                                    <option value="1+1">1+1</option>
+                                    <option value="2+1">2+1</option>
+                                    <option value="3+1">3+1</option>
+                                    <option value="4+1">4+1</option>
+                                    <option value="5+1">5+1</option>
+                                    <option value="6+1">6+1</option>
+                                </select>
+                                <i class="ph ph-caret-down"></i>
+                            </div>
                         </div>
                         <div class="listings-grid" id="findings-grid">
                             <div class="empty-state">
