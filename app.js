@@ -252,6 +252,20 @@ const app = {
         }
     },
 
+    // Admin email
+    adminEmail: 'hkn.gnhr1@gmail.com',
+
+    // Admin-only elementleri göster/gizle
+    checkAdminElements() {
+        const currentEmail = window.auth?.currentUser?.email;
+        const isAdmin = currentEmail === this.adminEmail;
+        const adminElements = document.querySelectorAll('.admin-only');
+
+        adminElements.forEach(el => {
+            el.style.display = isAdmin ? '' : 'none';
+        });
+    },
+
     async changePassword() {
         const currentPassword = document.getElementById('current-password').value;
         const newPassword = document.getElementById('new-password').value;
@@ -1304,6 +1318,9 @@ const app = {
 
         // Gece modu tercihini yükle
         this.initDarkMode();
+
+        // Admin-only elementleri kontrol et
+        this.checkAdminElements();
 
         // IndexedDB'yi başlat, sonra verileri yükle
         this.photoStore.init().then(() => {
