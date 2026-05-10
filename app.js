@@ -4668,6 +4668,13 @@ const app = {
         targetArray[index] = updatedListing;
         this.saveData(targetKey);
 
+        // Mülk sahibini otomatik olarak Ev Sahipleri'ne ekle
+        const ownerName = formData.get('owner_name');
+        const ownerPhone = formData.get('owner_phone');
+        if (ownerName && ownerName.trim()) {
+            this.addOwnerToCustomers(ownerName.trim(), ownerPhone ? ownerPhone.trim() : '', location);
+        }
+
         // DEBUG: localStorage'a kaydedildi mi kontrol et
         const saved = JSON.parse(localStorage.getItem('rea_' + targetKey));
         const savedListing = saved ? saved.find(l => l.id === id) : null;
