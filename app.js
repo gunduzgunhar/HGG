@@ -3947,6 +3947,7 @@ const app = {
 
     // Mülk sahibini otomatik olarak Ev Sahipleri listesine ekle
     addOwnerToCustomers(name, phone, region) {
+        console.log('addOwnerToCustomers çağrıldı:', name, phone, region);
         if (!this.data.customers) this.data.customers = [];
 
         // Aynı telefon numarasıyla kayıtlı biri var mı kontrol et
