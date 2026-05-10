@@ -3564,8 +3564,8 @@ const app = {
                 const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
 
                 return `
-                            <div class="listing-card type-${item.type}" onclick="app.openFindingDetail(${item.id})">
-                                <button class="listing-menu-btn" onclick="event.stopPropagation(); app.toggleListingMenu(event, ${item.id})"><i class="ph ph-dots-three"></i></button>
+                            <div class="listing-card type-${item.type}" onclick="app.openFindingDetail('${item.id}')">
+                                <button class="listing-menu-btn" onclick="event.stopPropagation(); app.toggleListingMenu(event, '${item.id}')"><i class="ph ph-dots-three"></i></button>
                                 <div class="context-menu-dropdown" id="menu-${item.id}">
                                     <div class="context-menu-item" onclick="app.handleStatusUpdate(event, ${item.id}, 'begenilmedi')">
                                         <i class="ph ph-thumbs-down" style="color: #ef4444"></i> Beğenilmedi
@@ -3635,8 +3635,14 @@ const app = {
     },
 
     openFindingDetail(id) {
-        const item = (this.data.findings || []).find(x => x.id === id);
-        if (!item) return;
+        console.log('openFindingDetail called with id:', id, typeof id);
+        console.log('findings:', this.data.findings);
+        const item = (this.data.findings || []).find(x => x.id == id);
+        console.log('found item:', item);
+        if (!item) {
+            alert('Bulum bulunamadı! ID: ' + id);
+            return;
+        }
 
         const price = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '0';
         const date = item.date ? new Date(item.date).toLocaleDateString('tr-TR') : '-';
