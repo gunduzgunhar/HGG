@@ -3534,9 +3534,11 @@ const app = {
                                             <i class="ph ph-map-pin"></i> ${location}
                                         </div>
                                     </div>
-                                    <div class="listing-price-badge">${price} ₺</div>
+                                    ${item.status === 'sold' || item.status === 'cancelled'
+                                        ? `<div class="listing-price-badge" style="text-decoration: line-through; opacity: 0.7;"><i class="ph ph-x" style="margin-right: 3px; font-size: 12px;"></i>${price} ₺</div>`
+                                        : `<div class="listing-price-badge">${price} ₺</div>`}
                                 </div>
-            
+
                                 <!-- Body: Stats Grid -->
                                 <div class="listing-stats-grid">
                                     <div class="stat-item" title="Oda Sayısı">
