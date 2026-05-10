@@ -3945,6 +3945,53 @@ const app = {
         }
     },
 
+    // Mülk sahibini otomatik olarak Ev Sahipleri listesine ekle
+    addOwnerToCustomers(name, phone, region) {
+        if (!this.data.customers) this.data.customers = [];
+
+        // Aynı telefon numarasıyla kayıtlı biri var mı kontrol et
+        if (phone) {
+            const existingByPhone = this.data.customers.find(c =>
+                c.phone && c.phone.replace(/\s/g, '') === phone.replace(/\s/g, '')
+            );
+            if (existingByPhone) {
+                console.log('Bu telefon numarasıyla kayıtlı ev sahibi zaten var:', existingByPhone.name);
+                return; // Zaten var, ekleme
+            }
+        }
+
+        // Aynı isimle kayıtlı biri var mı kontrol et
+        const existingByName = this.data.customers.find(c =>
+            c.name && c.name.toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR') && c.type === 'seller'
+        );
+        if (existingByName) {
+            console.log('Bu isimle kayıtlı ev sahibi zaten var:', existingByName.name);
+            return; // Zaten var, ekleme
+        }
+
+        // Yeni ev sahibi ekle
+        const newOwner = {
+            id: Date.now(),
+            name: name,
+            phone: phone || '',
+            budget: '',
+            region: region || '',
+            room_pref: '',
+            kitchen_pref: '',
+            max_building_age: '',
+            damage_pref: '',
+            site_pref: '',
+            type: 'seller', // Ev sahibi olarak işaretle
+            priority: 'normal',
+            notes: 'İlan eklenirken otomatik oluşturuldu',
+            createdBy: window.auth?.currentUser?.email || 'unknown'
+        };
+
+        this.data.customers.unshift(newOwner);
+        this.saveData('customers');
+        console.log('Yeni ev sahibi eklendi:', name);
+    },
+
     addNewCustomer() {
         const form = document.getElementById('form-add-customer');
         if (!form) return;
@@ -5180,6 +5227,13 @@ app.addListing = function (formData) {
             }
 
             app.saveData(targetKey);
+
+            // Mülk sahibini otomatik olarak Ev Sahipleri'ne ekle
+            const ownerName = formData.get('owner_name');
+            const ownerPhone = formData.get('owner_phone');
+            if (ownerName && ownerName.trim()) {
+                app.addOwnerToCustomers(ownerName.trim(), ownerPhone ? ownerPhone.trim() : '', location);
+            }
 
             if (mode === 'finding') {
                 app.renderFindings();
