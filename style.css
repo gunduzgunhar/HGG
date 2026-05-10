@@ -1628,15 +1628,36 @@ body.dark-mode .context-menu-item:hover {
 
 /* Dark mode - Listing stats grid (oda, kat, m²) */
 body.dark-mode .listing-stats-grid {
-    background: #0f172a;
+    background: #0f172a !important;
 }
 
 body.dark-mode .stat-item {
-    color: #f1f5f9;
+    color: #f1f5f9 !important;
 }
 
 body.dark-mode .stat-item i {
-    color: #94a3b8;
+    color: #94a3b8 !important;
+}
+
+/* Dark mode - Gallery detay bölümü */
+body.dark-mode .gallery-details-section,
+body.dark-mode [class*="gallery"] [style*="background: #f9fafb"],
+body.dark-mode [class*="gallery"] [style*="background:#f9fafb"] {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .gallery-details-section h4,
+body.dark-mode #gallery-listing-details {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode #gallery-listing-details div {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #gallery-listing-details b {
+    color: #f1f5f9 !important;
 }
 
 /* Dark mode - İlanlar ve detay panelleri */
