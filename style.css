@@ -1625,3 +1625,112 @@ body.dark-mode .context-menu-dropdown {
 body.dark-mode .context-menu-item:hover {
     background: #334155;
 }
+
+/* Dark mode - İlanlar ve detay panelleri */
+body.dark-mode .gallery-panel,
+body.dark-mode .detail-panel,
+body.dark-mode .info-panel,
+body.dark-mode [style*="background: white"],
+body.dark-mode [style*="background:white"],
+body.dark-mode [style*="background:#fff"],
+body.dark-mode [style*="background: #fff"],
+body.dark-mode [style*="background:#ffffff"],
+body.dark-mode [style*="background: #ffffff"] {
+    background: #1e293b !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode details {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode details summary {
+    background: #334155 !important;
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode details > div {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+}
+
+/* Fiyatı Değişenler ve diğer paneller */
+body.dark-mode [style*="background:#fffbeb"],
+body.dark-mode [style*="background: #fffbeb"],
+body.dark-mode [style*="background:#fff7ed"],
+body.dark-mode [style*="background:#fff5f5"],
+body.dark-mode [style*="background:#fef3c7"] {
+    background: #3b2f1a !important;
+    border-color: #78350f !important;
+}
+
+body.dark-mode [style*="color:#666"],
+body.dark-mode [style*="color: #666"],
+body.dark-mode [style*="color:#64748b"],
+body.dark-mode [style*="color:#6b7280"],
+body.dark-mode [style*="color:#475569"],
+body.dark-mode [style*="color:#4b5563"] {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode [style*="color:#1e293b"],
+body.dark-mode [style*="color:#1f2937"],
+body.dark-mode [style*="color:#111827"],
+body.dark-mode [style*="color:#374151"] {
+    color: #f1f5f9 !important;
+}
+
+/* Kartlar ve grid itemlar */
+body.dark-mode .listings-grid > div,
+body.dark-mode .targets-grid > div,
+body.dark-mode .fsbo-card,
+body.dark-mode .customer-card,
+body.dark-mode .target-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+/* Chip ve badge'ler */
+body.dark-mode [style*="border-radius:999px"][style*="background:#fff"],
+body.dark-mode [style*="border-radius: 999px"][style*="background: #fff"] {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #cbd5e1 !important;
+}
+
+/* Stat boxlar */
+body.dark-mode [style*="background:#f8fafc"],
+body.dark-mode [style*="background: #f8fafc"],
+body.dark-mode [style*="background:#f1f5f9"] {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+}
+
+/* Empty state */
+body.dark-mode .empty-state {
+    color: #94a3b8;
+}
+
+/* Butonlar */
+body.dark-mode .btn-secondary,
+body.dark-mode button[style*="background: white"],
+body.dark-mode button[style*="background:white"] {
+    background: #334155 !important;
+    color: #f1f5f9 !important;
+    border-color: #475569 !important;
+}
+
+/* Galeri ve lightbox */
+body.dark-mode .lightbox-overlay {
+    background: rgba(0, 0, 0, 0.95);
+}
+
+/* Popup ve alert */
+body.dark-mode .popup,
+body.dark-mode .alert-box {
+    background: #1e293b;
+    color: #f1f5f9;
+    border-color: #334155;
+}
