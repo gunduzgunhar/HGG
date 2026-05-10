@@ -3993,6 +3993,66 @@ const app = {
         console.log('Yeni ev sahibi eklendi:', name);
     },
 
+    // Ev sahibinin ilanlarını göster
+    showOwnerListings(ownerName, ownerPhone) {
+        const nameLower = (ownerName || '').toLocaleLowerCase('tr-TR').trim();
+        const phoneClean = (ownerPhone || '').replace(/\s/g, '');
+
+        // İlanlar ve bulumlar arasında ara
+        const matchingListings = (this.data.listings || []).filter(item => {
+            const itemName = (item.owner_name || '').toLocaleLowerCase('tr-TR').trim();
+            const itemPhone = (item.owner_phone || '').replace(/\s/g, '');
+            return (nameLower && itemName === nameLower) || (phoneClean && itemPhone === phoneClean);
+        });
+
+        const matchingFindings = (this.data.findings || []).filter(item => {
+            const itemName = (item.owner_name || '').toLocaleLowerCase('tr-TR').trim();
+            const itemPhone = (item.owner_phone || '').replace(/\s/g, '');
+            return (nameLower && itemName === nameLower) || (phoneClean && itemPhone === phoneClean);
+        });
+
+        const allMatches = [...matchingListings.map(l => ({...l, source: 'listing'})), ...matchingFindings.map(f => ({...f, source: 'finding'}))];
+
+        if (allMatches.length === 0) {
+            alert(`${ownerName} adına kayıtlı ilan bulunamadı.`);
+            return;
+        }
+
+        // Modal içeriğini oluştur
+        const html = allMatches.map(item => {
+            const price = item.price ? parseInt(item.price).toLocaleString('tr-TR') : '0';
+            const type = item.type === 'sale' ? 'Satılık' : 'Kiralık';
+            const sourceLabel = item.source === 'listing' ? 'İlan' : 'Bulum';
+            const sourceColor = item.source === 'listing' ? '#16a34a' : '#f97316';
+
+            return `
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; cursor:pointer;"
+                     onclick="app.modals.closeAll(); app.${item.source === 'listing' ? 'openListingDetail' : 'openFindingDetail'}(${item.id})">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-weight:600; color:#1e293b;">${item.title || 'İsimsiz'}</span>
+                        <span style="background:${sourceColor}; color:white; font-size:10px; padding:2px 8px; border-radius:4px;">${sourceLabel}</span>
+                    </div>
+                    <div style="font-size:13px; color:#64748b; margin-bottom:6px;">
+                        <i class="ph ph-map-pin"></i> ${item.location || '-'}
+                    </div>
+                    <div style="display:flex; gap:12px; font-size:12px; color:#64748b;">
+                        <span><i class="ph ph-door"></i> ${item.rooms || '-'}</span>
+                        <span><i class="ph ph-ruler"></i> ${item.size_net || '-'} m²</span>
+                    </div>
+                    <div style="font-size:16px; font-weight:700; color:#4f46e5; margin-top:8px;">${price} TL</div>
+                </div>
+            `;
+        }).join('');
+
+        document.getElementById('matches-title').textContent = `${ownerName} - İlanları (${allMatches.length})`;
+        document.getElementById('matches-list').innerHTML = `
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:12px;">
+                ${html}
+            </div>
+        `;
+        this.modals.open('matches');
+    },
+
     addNewCustomer() {
         const form = document.getElementById('form-add-customer');
         if (!form) return;
@@ -4386,7 +4446,10 @@ const app = {
                         </div>
                         ${customer.notes ? `<p style="font-size: 12px; color: #4b5563; margin: 8px 0 0; padding: 8px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #d1d5db; white-space: pre-wrap; line-height: 1.4;"><i class="ph ph-note-pencil" style="color:#9ca3af;"></i> ${customer.notes}</p>` : ''}
                         <div style="display: flex; gap: 8px; margin-top: 12px; border-top: 1px solid #f3f4f6; padding-top: 12px;">
-                            <button onclick="app.findMatches('${customer.id}')" style="flex: 1; background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;">İlan Bul</button>
+                            ${customer.type === 'seller'
+                                ? `<button onclick="app.showOwnerListings('${customer.name}', '${customer.phone}')" style="flex: 1; background: #f59e0b; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;"><i class="ph ph-buildings"></i> İlanlarını Gör</button>`
+                                : `<button onclick="app.findMatches('${customer.id}')" style="flex: 1; background: #4f46e5; color: white; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer; font-weight: 500;">İlan Bul</button>`
+                            }
                             <button onclick="app.openCustomerEditPopup('${customer.id}')" style="flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; padding: 8px 0; font-size: 12px; cursor: pointer;">Düzenle</button>
                             <button onclick="app.deleteCustomer('${customer.id}')" style="background: #fef2f2; color: #dc2626; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer;"><i class="ph ph-trash"></i></button>
                         </div>
