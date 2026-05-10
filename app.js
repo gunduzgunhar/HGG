@@ -3681,7 +3681,8 @@ const app = {
             site_pref: formData.get('site_pref'),
             type: formData.get('type'),
             priority: 'normal',
-            notes: formData.get('notes')
+            notes: formData.get('notes'),
+            createdBy: window.auth?.currentUser?.email || 'unknown'
         };
 
         this.data.customers.unshift(newCustomer);
@@ -3982,7 +3983,12 @@ const app = {
 
     renderCustomers() {
         const list = document.getElementById('crm-list');
-        let customers = this.data.customers;
+
+        // Kullanıcıya özel filtreleme
+        const currentUserEmail = window.auth?.currentUser?.email;
+        let customers = (this.data.customers || []).filter(c =>
+            !c.createdBy || c.createdBy === currentUserEmail
+        );
 
         if (this.crmFilter === 'seller') {
             customers = customers.filter(c => c.type === 'seller');
@@ -5078,7 +5084,10 @@ app.renderFsboList = function () {
     container.innerHTML = '';
     if (renewedContainer) renewedContainer.innerHTML = '';
 
-    const items = this.data.fsbo || [];
+    // Kullanıcıya özel filtreleme
+    const currentUserEmail = window.auth?.currentUser?.email;
+    const allItems = this.data.fsbo || [];
+    const items = allItems.filter(item => !item.createdBy || item.createdBy === currentUserEmail);
     if (items.length === 0) {
         container.innerHTML = '<div class="empty-state">Henüz kayıtlı FSBO fırsatı yok.</div>';
         if (statsContainer) statsContainer.innerHTML = '';
@@ -5513,6 +5522,9 @@ app.addFsbo = function (formData) {
     // Use the photos currently in the preview array (already base64)
     const currentPhotos = this.fsboPhotos || [];
 
+    // Düzenleme modunda mevcut createdBy'ı koru
+    const existingFsbo = editId ? this.data.fsbo.find(x => x.id === editId) : null;
+
     const newItem = {
         id: editId || 'fsbo_' + Date.now(),
         owner: formData.get('owner'),
@@ -5532,7 +5544,8 @@ app.addFsbo = function (formData) {
         building_age: formData.get('building_age'),
         building_name: formData.get('building_name'),
         photos: currentPhotos,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        createdBy: existingFsbo?.createdBy || window.auth?.currentUser?.email || 'unknown'
     };
 
     if (!this.data.fsbo) this.data.fsbo = [];
@@ -6542,7 +6555,8 @@ app.addTarget = function (formData) {
         address: formData.get('address'),
         agent_note: formData.get('agent_note'),
         photo: nextPhoto,
-        date: existingItem ? (existingItem.date || new Date().toISOString()) : new Date().toISOString()
+        date: existingItem ? (existingItem.date || new Date().toISOString()) : new Date().toISOString(),
+        createdBy: existingItem?.createdBy || window.auth?.currentUser?.email || 'unknown'
     };
 
     if (!this.data.targets) this.data.targets = [];
@@ -6582,8 +6596,11 @@ app.renderTargetListings = function () {
     const list = document.getElementById('targets-grid');
     if (!list) return;
 
-    // Silinmemiş hedefleri filtrele
-    const activeTargets = (this.data.targets || []).filter(t => !t.deleted);
+    // Kullanıcıya özel ve silinmemiş hedefleri filtrele
+    const currentUserEmail = window.auth?.currentUser?.email;
+    const activeTargets = (this.data.targets || []).filter(t =>
+        !t.deleted && (!t.createdBy || t.createdBy === currentUserEmail)
+    );
 
     if (activeTargets.length === 0) {
         list.innerHTML = `
