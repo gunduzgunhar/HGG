@@ -5084,30 +5084,16 @@ const app = {
                 : '-';
 
             return `
-                <div class="listing-card" onclick="app.openListingDetail(${item.listingId})" style="padding: 12px; margin-bottom: 8px; cursor: pointer;">
-                    <div class="listing-header" style="margin-bottom: 8px;">
-                        <div class="listing-title-group">
-                            <h3 class="listing-title" style="font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                                <span style="width:10px; height:10px; border-radius:50%; background:${dotColor}; display:inline-block; flex-shrink:0;"></span>
-                                ${escapeHtml(item.title)}
-                                ${urgency}
-                            </h3>
-                            <div class="listing-location-sm">
-                                <i class="ph ph-map-pin"></i> ${escapeHtml(item.location)}
-                            </div>
-                        </div>
-                        <div class="listing-price-badge">${formatPrice(item.newPrice)} ₺</div>
+                <div onclick="app.openListingDetail(${item.listingId})" style="display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                    <span style="width:8px; height:8px; border-radius:50%; background:${dotColor}; flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; font-weight:500; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(item.title)} ${urgency}</div>
+                        <div style="font-size:11px; color:#64748b;">${escapeHtml(item.location)}</div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border);">
-                        <div style="font-size: 12px; color: #64748b;">
-                            ${formatPrice(item.oldPrice)} ₺ → ${formatPrice(item.newPrice)} ₺
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-weight: 700; color: ${tone}; font-size: 13px;">${changePrefix}${formatPrice(item.change)} ₺</div>
-                            <div style="font-size: 11px; color: ${tone};">${changePrefix}${item.changePct.toFixed(2)}%</div>
-                        </div>
+                    <div style="text-align:right; flex-shrink:0;">
+                        <div style="font-size:12px; font-weight:600; color:${tone};">${changePrefix}${formatPrice(item.change)} ₺</div>
+                        <div style="font-size:10px; color:${tone};">${changePrefix}${item.changePct.toFixed(1)}%</div>
                     </div>
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 6px; text-align: right;">${dateLabel}</div>
                 </div>
             `;
         }).join('');
