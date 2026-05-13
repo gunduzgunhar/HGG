@@ -633,7 +633,7 @@ const app = {
 
         // 1. Base input
         const price = toNumber(listing.price);
-        const size = Math.max(20, toNumber(listing.size_net || listing.size_gross || 100));
+        const size = Math.max(20, toNumber(listing.size_net || listing.size_gross || listing.size || 100));
         if (!price) {
             alert('İlan fiyatı geçersiz görünüyor.');
             return;
@@ -692,7 +692,7 @@ const app = {
             return listingNeighborhoodNorm &&
                 normalizeText(soldLoc.neighborhood) === listingNeighborhoodNorm;
         }).map(sold => {
-            const soldSize = Math.max(20, toNumber(sold.size_net || sold.size_gross || 100));
+            const soldSize = Math.max(20, toNumber(sold.size_net || sold.size_gross || sold.size || 100));
             const soldPrice = toNumber(sold.final_price);
             const unitPrice = soldSize > 0 ? soldPrice / soldSize : 0;
             const soldDate = sold.status_date || sold.date || null;
