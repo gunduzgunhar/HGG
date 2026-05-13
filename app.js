@@ -1014,44 +1014,6 @@ const app = {
         }
         estimatedValue *= deedMultiplier;
 
-        // Kitchen Type Adjustment - Closed kitchen is preferred
-        // RELATIVE adjustment when using sold data
-        const kitchen = listing.kitchen || '';
-        let kitchenMultiplier = 1.0;
-        let kitchenLabel = '';
-
-        const soldHadClosedKitchen = usingSoldData && soldDataKitchen &&
-            (soldDataKitchen.includes('Kapalı') || soldDataKitchen.includes('kapalı'));
-        const listingHasClosedKitchen = kitchen.includes('Kapalı') || kitchen.includes('kapalı');
-
-        if (usingSoldData && soldDataKitchen) {
-            // RELATIVE: Compare kitchen types
-            if (listingHasClosedKitchen && !soldHadClosedKitchen) {
-                kitchenMultiplier = 1.07; // +7% (listing better than sold)
-                kitchenLabel = 'Kapalı Mutfak (satılana göre) +%7';
-            } else if (!listingHasClosedKitchen && soldHadClosedKitchen) {
-                kitchenMultiplier = 0.93; // -7% (listing worse than sold)
-                kitchenLabel = 'Açık Mutfak (satılana göre) -%7';
-            }
-        } else {
-            // ABSOLUTE: No sold data, just apply premium for closed kitchen
-            if (listingHasClosedKitchen) {
-                kitchenMultiplier = 1.07; // +7%
-                kitchenLabel = 'Kapalı Mutfak +%7';
-            }
-        }
-
-        kitchenMultiplier = dampMultiplier(kitchenMultiplier);
-        if (kitchenLabel && structuralAdjustmentDamping < 1) {
-            kitchenLabel += ' (bina emsali ile yumuşatıldı)';
-        }
-
-        if (kitchenLabel) {
-            const kitchenChange = estimatedValue * (kitchenMultiplier - 1);
-            adjustments.push({ label: kitchenLabel, amount: kitchenChange, percent: Math.round((kitchenMultiplier - 1) * 100) });
-        }
-        estimatedValue *= kitchenMultiplier;
-
         // Interior Condition (İçinin Durumu) Adjustment
         const interiorCondition = listing.interior_condition || 'Normal';
         let interiorMultiplier = 1.0;
