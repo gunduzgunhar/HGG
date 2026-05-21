@@ -793,6 +793,16 @@ const app = {
                 dataSource = `Aynı Site/Bina (${sameBuildingComparableCount} emsal)`;
                 locationCoverage = 'sold_same_building';
                 sameBuildingBlendApplied = true;
+
+                // Aynı site emsalinin özelliklerini baz al (yaş, site, mutfak, tapu)
+                const sbAges = sameBuildingCandidates.map(x => x.sold.building_age).filter(Boolean);
+                const sbSites = sameBuildingCandidates.map(x => x.sold.site_features).filter(Boolean);
+                const sbKitchens = sameBuildingCandidates.map(x => x.sold.kitchen).filter(Boolean);
+                const sbDeeds = sameBuildingCandidates.map(x => x.sold.deed_status).filter(Boolean);
+                if (sbAges.length > 0) soldDataAge = modeValue(sbAges);
+                if (sbSites.length > 0) soldDataSite = modeValue(sbSites);
+                if (sbKitchens.length > 0) soldDataKitchen = modeValue(sbKitchens);
+                if (sbDeeds.length > 0) soldDataDeed = modeValue(sbDeeds);
             }
         }
 
