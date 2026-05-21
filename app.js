@@ -3366,10 +3366,13 @@ const app = {
         const damageFilter = document.getElementById('list-filter-damage') ? document.getElementById('list-filter-damage').value : '';
         const typeFilter = document.getElementById('list-filter-type') ? document.getElementById('list-filter-type').value : 'all';
         const facadeFilter = document.getElementById('list-filter-facade') ? document.getElementById('list-filter-facade').value : 'all';
+        const hideSold = document.getElementById('list-filter-hide-sold') ? document.getElementById('list-filter-hide-sold').checked : false;
 
         // DEBUG: VISUALIZE FILTERS - REMOVED
 
         let filtered = this.data.listings.filter(item => {
+            // Satılanları gizle
+            if (hideSold && item.status === 'sold') return false;
             try {
                 // Safe string access with Turkish Locale support
                 const title = (item.title || '').toLocaleLowerCase('tr-TR');
