@@ -748,18 +748,24 @@ const app = {
         const listingStreetNorm = normalizeText(listing.street || '');
         const listingBuildingNorm = normalizeText(listing.building_name || '');
         const listingTitleNorm = normalizeText(listing.title || '');
-        const buildingKeywords = ['plaza', 'rezidans', 'residence', 'apartman', 'apt', 'sitesi', 'site', 'blok', 'kule'];
+        const listingRooms = normalizeText(listing.rooms || '');
+        const buildingKeywords = ['plaza', 'rezidans', 'residence', 'apartman', 'apt', 'sitesi', 'site', 'blok', 'kule', 'park', 'konut', 'evleri'];
         const titleStopWords = new Set(['satilik', 'kiralik', 'daire', 'ofis', 'isyeri', 'ev', 'mahfesigmaz', 'mahfesigmazda', 'adana', 'mah', 'mh']);
         const titleTokens = (txt) => normalizeText(txt)
             .split(/\s+/)
             .filter(t => t && t.length >= 3 && !titleStopWords.has(t) && !/^\d+$/.test(t) && !t.includes('+'));
+        // Boşlukları kaldırarak karşılaştırma (efepark = efe park)
+        const removeSpaces = (str) => str.replace(/\s+/g, '');
 
         if (soldCandidates.length > 0 && (listingStreetNorm || listingBuildingNorm || listingTitleNorm)) {
             const sameBuildingCandidates = soldCandidates.filter(x => {
                 const soldStreetNorm = normalizeText(x.sold.street || '');
                 const soldBuildingNorm = normalizeText(x.sold.building_name || '');
                 const soldTitleNorm = normalizeText(x.sold.title || '');
-                const byBuilding = listingBuildingNorm && soldBuildingNorm && listingBuildingNorm === soldBuildingNorm;
+                const soldRooms = normalizeText(x.sold.rooms || '');
+                // Boşluksuz karşılaştırma (efepark = efe park)
+                const byBuilding = listingBuildingNorm && soldBuildingNorm &&
+                    removeSpaces(listingBuildingNorm) === removeSpaces(soldBuildingNorm);
                 const byStreet = listingStreetNorm && soldStreetNorm && listingStreetNorm === soldStreetNorm;
                 let byTitle = false;
                 if (listingTitleNorm && soldTitleNorm) {
@@ -767,19 +773,24 @@ const app = {
                     const sSet = new Set(titleTokens(soldTitleNorm));
                     const sharedTokens = lTokens.filter(t => sSet.has(t));
                     const hasBuildingCue = buildingKeywords.some(k => listingTitleNorm.includes(k) && soldTitleNorm.includes(k));
-                    byTitle = hasBuildingCue && sharedTokens.length >= 1;
+                    // Boşluksuz eşleşme de kontrol et (efepark vs efe park)
+                    const titleMatch = removeSpaces(listingTitleNorm).includes(removeSpaces(soldTitleNorm).substring(0, 6)) ||
+                        removeSpaces(soldTitleNorm).includes(removeSpaces(listingTitleNorm).substring(0, 6));
+                    byTitle = (hasBuildingCue && sharedTokens.length >= 1) || (titleMatch && sharedTokens.length >= 1);
                 }
-                const sizeSimilarity = Math.abs((x.soldSize - size) / size) <= 0.15;
-                return sizeSimilarity && (byBuilding || byStreet || byTitle);
+                // Oda sayısı kontrolü (3+1 = 3+1, farklıysa eşleşme yok)
+                const roomsMatch = !listingRooms || !soldRooms || listingRooms === soldRooms;
+                return roomsMatch && (byBuilding || byStreet || byTitle);
             });
 
             if (sameBuildingCandidates.length > 0) {
                 sameBuildingComparableCount = sameBuildingCandidates.length;
                 const sameBuildingMedianUnit = median(sameBuildingCandidates.map(x => x.unitPrice));
                 const neighborhoodUnit = marketAvg;
-                const buildingWeight = sameBuildingComparableCount >= 2 ? 0.70 : 0.60;
+                // Aynı site emsali varsa çok daha yüksek ağırlık ver
+                const buildingWeight = sameBuildingComparableCount >= 2 ? 0.90 : 0.80;
                 marketAvg = Math.round(sameBuildingMedianUnit * buildingWeight + neighborhoodUnit * (1 - buildingWeight));
-                dataSource = `Aynı Bina/Sokak + Mahalle Harmanı (${sameBuildingComparableCount} bina emsali)`;
+                dataSource = `Aynı Site/Bina (${sameBuildingComparableCount} emsal)`;
                 locationCoverage = 'sold_same_building';
                 sameBuildingBlendApplied = true;
             }
